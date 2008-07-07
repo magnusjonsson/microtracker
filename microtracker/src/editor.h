@@ -148,32 +148,6 @@ void editor_delete_order(struct editor* editor) {
   }
 }
 
-int editor_save_as_wav(struct editor* editor, const char* filename) {
-  FILE* f = wavwriter_begin(filename,44100);
-  if (!f) {
-    fprintf(stderr,"Error opening file for writing\n");
-    getch();
-    return 1;
-  }
-  struct player player;
-  float left[256];
-  float right[256];
-  short out[512];
-  player_init(&player,editor->song);
-  player_play(&player);
-  do {
-    int length = player_generate_some_audio(&player,left,right,256);
-    float_to_short_stereo(left,right,out,length);
-    for(int i=0;i<length*2;i++) {
-      fputint16(out[i],f);
-    }
-  } while(!player_is_at_beginning_of_song(&player));
-  player_stop(&player);
-  player_finalize(&player);
-  wavwriter_end(f);
-  return 0;
-}
-
 void editor_increment_order(struct editor* editor, int delta) {
   struct song* song = editor->song;
   song->order[editor->order_pos] =
@@ -277,10 +251,6 @@ int editor_handle_key(struct editor* editor) {
     }
     if (ch == KEY_F(3)) {
       song_load(editor->song,editor->filename);
-      break;
-    }
-    if (ch == KEY_F(4)) {
-      editor_save_as_wav(editor,"dump.wav");
       break;
     }
     if (ch == KEY_F(5)) {

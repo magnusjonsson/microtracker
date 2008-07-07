@@ -4,7 +4,6 @@
 #include <malloc.h>
 #include <stdio.h>
 #include <pthread.h>
-#include "wavwriter.h"
 
 struct player {
   struct song* song;
@@ -53,7 +52,7 @@ int player_init(struct player* player, struct song* song) {
   if (pthread_mutex_init(&player->mutex,NULL))
     return 1;
   player->song = song;
-  player->synthdesc = finddesc("organ"); // TODO: reclaim synthdesc to make dll unload
+  player->synthdesc = finddesc("simplesynth"); // TODO: reclaim synthdesc to make dll unload
   
   if (!player->synthdesc) {
     fprintf(stderr,"Couldn't load organ plugin dll\n");
@@ -108,9 +107,6 @@ void player_advance_cursor(struct player* player) {
 }
 
 double calc_freq(int octave, int degree, int edo) {
-  // fun thing: round notes to 12-edo
-  //degree = (degree * 12 + 27)/53;
-  //return pow(2,octave+3+(double)degree/12.0);
   return pow(2,octave+3+(double)degree/edo);
 }
 
@@ -157,7 +153,7 @@ void player_generate_audio_block(struct player* player, float* out_left, float* 
 
   player->synthdesc->process(player->synthstate, length, NULL, outs);
   if (player->effectdesc && player->effectdesc->process) {
-    //player->effectdesc->process(player->effectstate, length, outs, outs);
+    player->effectdesc->process(player->effectstate, length, outs, outs);
   }
 }
 

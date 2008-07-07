@@ -1,6 +1,6 @@
 #include <portaudio.h>
-#include <stdlib.h> // rand
 #include <stdio.h> // fprintf
+#include "f2s.h"
 
 struct audio_io {
   PaStream* stream;
@@ -12,27 +12,6 @@ struct audio_io {
 static void print_pa_error(const char* context) {
   const PaHostErrorInfo *info = Pa_GetLastHostErrorInfo();
   fprintf(stderr,"%s: Portaudio error %li: %s\n",context,info->errorCode,info->errorText);
-}
-
-void float_to_short_stereo(float const* left,
-                           float const* right,
-                           short* out,
-                           int length)
-{
-  for(int i=0; i<length; i++ ) {
-    double l = left[i];
-    double r = right[i];
-    
-    if(l > 1.0) l = 1.0;
-    if(l < -1.0) l = -1.0;
-    if(r > 1.0) r = 1.0;
-    if(r < -1.0) r = -1.0;
-    double noise = rand()*(1.0/RAND_MAX) - rand()*(1.0/RAND_MAX);
-    int sl = 32768+l*32767 + noise;
-    int sr = 32768+r*32767 + noise;
-    out[2*i+0] = (short)(sl-32768);
-    out[2*i+1] = (short)(sr-32768);
-  }
 }
 
 static int pa_callback(const void *inputBuffer, void *outputBuffer,
