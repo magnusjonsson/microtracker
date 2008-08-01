@@ -71,11 +71,11 @@ static void init(void* synth, float samplerate) {
   s->noiselowpasscoeff = 3.141592*2/samplerate;
   s->bend = 1.0;
   s->invbend = 1.0;
-  s->filterscale=16*(2*3.141592);
+  s->filterscale=24*(2*3.141592);
   s->mod = 0.5;
   s->driftdepth=0.35;
   s->osctype=saw;
-  s->resonance = 0.0;
+  s->resonance = 0.125;
   s->dcfollower = 1.0e-6;
 }
 
@@ -124,7 +124,7 @@ static void process(void* synth, int length, float const* const* in, float* cons
         double oscsR = 1.0e-5;
         
         for(int j=0;j<OSCS;j++) {
-          double pan = (j+0.5)*(1.0/OSCS);
+          double pan = ((voiceno&3)+0.5)/4.0;
           
           double drift = v->drift[j];
           drift = (int)rng_state * drift_ingain + drift * drift_fbgain;
@@ -156,8 +156,8 @@ static void process(void* synth, int length, float const* const* in, float* cons
           }
 
           v->phase[j]=phase;
-          oscsL += (1-pan) * osc;
-          oscsR += pan * osc;
+          oscsL += sqrt(1-pan) * osc;
+          oscsR += sqrt(pan) * osc;
         }
         double smoothedampdiff = (gate-smoothedamp);
         double env = smoothedamp+=smoothedampdiff*
@@ -203,8 +203,8 @@ static void noteon(void* synth, int key, float freq, float velocity) {
 
   //v->gate = velocity;
   v->gate = 1.0;
-  float base = 440 * pow(freq / 440, 0.2);
-  v->fgain=base*velocity / s->samplerate;
+  float base = 440 * pow(freq / 440, 0.8);
+  v->fgain = base*velocity / s->samplerate;
   v->active=1;
 };
 

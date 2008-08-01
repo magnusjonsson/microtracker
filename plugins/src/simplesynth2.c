@@ -50,8 +50,6 @@ static void init(void* synth, float samplerate) {
     struct voice* v = &s->voice[i];
     v->gate=0;
     for(j=0;j<OSCS;j++) {
-      //      ms20filter_init(&v->filterL);
-      //      ms20filter_init(&v->filterR);
       ms20filter_init(&v->filterL);
       ms20filter_init(&v->filterR);
       v->phase[j]=-0.5+rand()*(1.0/(RAND_MAX+1.0));
@@ -119,7 +117,8 @@ static void process(void* synth, int length, float const* const* in, float* cons
         double oscsR = 1.0e-5;
         
         for(int j=0;j<OSCS;j++) {
-          double pan = (j+0.5)*(1.0/OSCS);
+          //          double pan = (j+0.5)*(1.0/OSCS);
+          double pan = (0.5+(voiceno&3))*(1.0/4.0);
           
           double drift = v->drift[j];
           drift = (int)rng_state * drift_ingain + drift * drift_fbgain;
@@ -151,8 +150,10 @@ static void process(void* synth, int length, float const* const* in, float* cons
           }
 
           v->phase[j]=phase;
-          oscsL += (1-pan) * osc;
-          oscsR += pan * osc;
+          double gainL = sqrt(1-pan);
+          double gainR = sqrt(pan);
+          oscsL += gainL * osc;
+          oscsR += gainR * osc;
         }
         double smoothedampdiff = (gate-smoothedamp);
         double env = smoothedamp+=smoothedampdiff*

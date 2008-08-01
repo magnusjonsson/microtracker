@@ -3,12 +3,14 @@ WARNING_FLAGS = -Wall
 LIBS = -shared
 GCC_FLAGS = $(OPT_FLAGS) $(WARNING_FLAGS) -std=gnu99 -Isrc/shared
 
-all : organ.so reverb.so reverb2.so reverb3.so reverb4.so chorus.so simplesynth.so plucksynth.so drop.so 2drop.so add.so 2add.so swap.so resobass.so simplesynth2.so
+all : organ.so reverb.so reverb2.so reverb3.so reverb4.so chorus.so simplesynth.so plucksynth.so drop.so 2drop.so add.so 2add.so swap.so resobass.so simplesynth2.so simplesynth3.so
 
 organ.so : src/organ.o src/shared/pipe.o src/shared/onepole.o src/shared/delay.o src/shared/lagrange.o
 reverb3.so : src/reverb3.o src/shared/bandpass.c
+reverb4.so : src/reverb4.o src/shared/onepole.o
 simplesynth.so : src/simplesynth.o src/shared/moogfilter.o src/shared/fasttanh.o
 simplesynth2.so : src/simplesynth2.o src/shared/ms20filter.o src/shared/fasttanh.o
+simplesynth3.so : src/simplesynth3.o src/shared/ms20filter.o src/shared/fasttanh.o
 resobass.so : src/resobass.o src/shared/moogfilter.o src/shared/fasttanh.o
 
 %.so : src/%.o

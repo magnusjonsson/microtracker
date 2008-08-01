@@ -11,11 +11,11 @@ static void calcdelaylength(float samplerate, float frequency,
     length_in_samples*=2;
     frequency*=0.5;
   }
-  length_in_samples -= 0.01;
+  length_in_samples -= 0.35;
 
   int whole_length = (int)(length_in_samples);
   float frac_length = length_in_samples-whole_length;
-  while(frac_length < 0.4 && whole_length > 1) {
+  while(frac_length < 0.5 && whole_length > 1) {
     frac_length++;
     whole_length--;
   }
