@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
   song_init(&song);
   song_load(&song,filename);
   if (!player_init(&player,&song)) {
-    if (!audio_io_init(&audio_io,&player)) {
+    if (!audio_io_init(&audio_io,&player,3)) {
       editor_init(&editor,filename,&song,&player);
       editor_run(&editor);
       editor_finalize(&editor);

@@ -112,8 +112,8 @@ static void process(void* synth,int length,float const * const * in, float * con
     *r0 = or * 0.8 + in0[i];
 
     // output
-    out0[i] = in0[i] + ol * 0.45;
-    out1[i] = in1[i] + or * 0.45;
+    out0[i] = in0[i] + ol * 0.25;
+    out1[i] = in1[i] + or * 0.25;
 
     // allpass filters
     float phase = r->phase;

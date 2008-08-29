@@ -5,8 +5,12 @@
 
 const struct synthdesc* finddesc(const char* name) {
   char buffer[1024];
+#ifdef CYGWIN
+  sprintf(buffer,"../plugins/%s.so",name);
+#else
   snprintf(buffer,1024,"../plugins/%s.so",name);
-  void* handle = dlopen(buffer,RTLD_LAZY | RTLD_LOCAL);
+#endif
+  void* handle = dlopen(buffer,RTLD_LAZY /* | RTLD_LOCAL not supported on CYGWIN*/);
   if (!handle) {
     fprintf(stderr, "dlopen: %s\n", dlerror());
     return NULL;

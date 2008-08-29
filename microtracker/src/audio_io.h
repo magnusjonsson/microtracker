@@ -41,7 +41,9 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
   return 0;
 }
 
-int audio_io_init(struct audio_io* audio_io, struct player* player) {
+void audio_io_finalize(struct audio_io* audio_io);
+
+int audio_io_init(struct audio_io* audio_io, struct player* player, int device) {
   memset(audio_io,0,sizeof(*audio_io));
   audio_io->player = player;
 
@@ -50,28 +52,13 @@ int audio_io_init(struct audio_io* audio_io, struct player* player) {
     return 1;
   }
   
-  PaHostApiInfo const* api_info =
-    Pa_GetHostApiInfo(Pa_HostApiTypeIdToHostApiIndex(paALSA));
-  if (!api_info) {
-    fprintf(stderr,"Error: no alsa\n");
-    return 1;
+  PaDeviceInfo const* out_info = Pa_GetDeviceInfo(device);
+  if (!out_info) {
+    fprintf(stderr,"Error: Invalid output device number %i\n",device);
+    goto error;
   }
-  /*
-  PaStreamParameters inputParameters={
-    .device=api_info->defaultInputDevice,
-    .channelCount=2,
-    .sampleFormat=paInt16,
-    .suggestedLatency=0.030,
-    .hostApiSpecificStreamInfo=NULL,
-  };
-  */
-  if (api_info->defaultOutputDevice == paNoDevice) {
-    fprintf(stderr,"Error: no default alsa output device\n");
-    return 1;
-  }
-  PaDeviceInfo const* out_info = Pa_GetDeviceInfo(api_info->defaultOutputDevice);
   PaStreamParameters outputParameters={
-    .device=api_info->defaultOutputDevice,
+    .device=device,
     .channelCount=2,
     .sampleFormat=paInt16,
     .suggestedLatency=out_info->defaultLowOutputLatency*1.5,
@@ -92,15 +79,18 @@ int audio_io_init(struct audio_io* audio_io, struct player* player) {
                                  your callback*/
       != paNoError) {
     print_pa_error("Pa_OpenStream");
-    return 1;
+    goto error;
   }
   
   if(Pa_StartStream(audio_io->stream) != paNoError) {
     print_pa_error("Pa_StartStream");
-    return 1;
+    goto error;
   }
 
   return 0;
+ error:
+  audio_io_finalize(audio_io);
+  return 1;
 }
 
 void audio_io_finalize(struct audio_io* audio_io) {
@@ -108,10 +98,10 @@ void audio_io_finalize(struct audio_io* audio_io) {
     if(Pa_StopStream(audio_io->stream) != paNoError) {
       print_pa_error("Pa_StopStream");
     }
-    audio_io->stream = NULL;
     if(Pa_CloseStream(audio_io->stream) != paNoError) {
       print_pa_error("Pa_CloseStream");
     }
+    audio_io->stream = NULL;
   }
 
   if (Pa_Terminate() != paNoError) {
