@@ -51,6 +51,13 @@ int audio_io_init(struct audio_io* audio_io, struct player* player, int device) 
     print_pa_error("Pa_Initialize");
     return 1;
   }
+  if (device < 0) {
+    device = Pa_GetDefaultOutputDevice();
+    if (device < 0) {
+      print_pa_error("Pa_GetDefaultOutputDevice");
+      goto error;
+    }
+  }
   
   PaDeviceInfo const* out_info = Pa_GetDeviceInfo(device);
   if (!out_info) {
