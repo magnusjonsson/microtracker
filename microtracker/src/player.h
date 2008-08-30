@@ -10,7 +10,6 @@ struct player {
   char playing;
   short order_pos;
   short pat_line;
-  //struct track tracks[PAT_TRACKS];
   
   int distance_to_next_tick;
 

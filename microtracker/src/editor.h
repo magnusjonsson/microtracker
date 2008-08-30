@@ -18,7 +18,6 @@ void editor_init(struct editor* editor, const char* filename, struct song* song,
 
   initscr();
   keypad(stdscr,TRUE);
-  //editor->win = newwin(0,0,0,0);
   editor->win = stdscr;
   wrefresh(editor->win);
 }
@@ -285,6 +284,5 @@ void editor_run(struct editor* editor) {
 }
 
 void editor_finalize(struct editor* editor) {
-  //delwin(editor->win);
   endwin();
 }
