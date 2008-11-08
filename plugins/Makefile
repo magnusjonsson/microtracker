@@ -1,7 +1,7 @@
 OPT_FLAGS = -O3 -ffast-math
 WARNING_FLAGS = -Wall
 LIBS = -shared
-GCC_FLAGS = $(OPT_FLAGS) $(WARNING_FLAGS) -std=gnu99 -Isrc/shared
+GCC_FLAGS = $(OPT_FLAGS) -fPIC $(WARNING_FLAGS) -std=gnu99 -Isrc/shared
 
 all : organ.so reverb.so reverb2.so reverb3.so reverb4.so chorus.so simplesynth.so plucksynth.so drop.so 2drop.so add.so 2add.so swap.so resobass.so simplesynth2.so
 

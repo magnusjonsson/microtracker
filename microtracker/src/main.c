@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <memory.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include "song.h"
 #include "player.h"
