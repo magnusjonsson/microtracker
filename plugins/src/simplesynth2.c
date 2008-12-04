@@ -162,13 +162,10 @@ static void process(void* synth, int length, float const* const* in, float* cons
         double omega = s->filterscale * v->fgain;
         double resonance = s->resonance;
 
-        oscsL *= 2;
-        oscsR *= 2;
-
         oscsL = ms20filter_tick(&v->filterL, oscsL, 0, omega, resonance);
         oscsR = ms20filter_tick(&v->filterR, oscsR, 0, omega, resonance);
 
-        env *= gain * sqrt(0.05/OSCS);
+        env *= gain * sqrt(0.01/OSCS);
         oscsL *= env;
         oscsR *= env;
 
