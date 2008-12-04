@@ -11,9 +11,11 @@ int main(int argc, char** argv) {
   const char* outfile = argc >= 3 ? argv[2] : "dump.wav";
   struct song song;
   struct player player;
+  struct synthdesc const* synthdesc = finddesc("simplesynth");
+  struct synthdesc const* effectdesc = finddesc("reverb4");
   song_init(&song);
   song_load(&song,infile);
-  if (!player_init(&player,&song)) {
+  if (!player_init(&player,&song,synthdesc,effectdesc)) {
     player_play(&player);
     FILE* f = wavwriter_begin(outfile,44100);
     if (!f) {

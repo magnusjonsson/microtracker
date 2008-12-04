@@ -1,7 +1,9 @@
 #include <string.h>
-#include "synths.h"
 #include <dlfcn.h>
 #include <stdio.h>
+#include <malloc.h>
+#include "synths.h"
+#include "synthdesc.h"
 
 const struct synthdesc* finddesc(const char* name) {
   char buffer[1024];
@@ -23,3 +25,27 @@ const struct synthdesc* finddesc(const char* name) {
   }
   return synthdesc;
 }
+
+int synthdesc_instantiate(struct synthdesc const* synthdesc, double samplerate, void** state) {
+  *state = synthdesc->size ? malloc(synthdesc->size(samplerate)) : NULL;
+  if (!*state) {
+    fprintf(stderr,"Failed to allocate memory for synth\n");
+    return 1;
+  }
+
+  if (synthdesc->init)
+    synthdesc->init(*state, 44100);
+
+  return 0;
+}
+
+void synthdesc_deinstantiate(struct synthdesc const* synthdesc, void** state) {
+  if (synthdesc) {
+    if (synthdesc->finalize) {
+      synthdesc->finalize(*state);
+      free(*state);
+      *state = NULL;
+    }
+  }
+}
+

@@ -38,9 +38,11 @@ int run(struct options const* options) {
   struct player player;
   struct audio_io audio_io;
   struct editor editor;
+  struct synthdesc const* synthdesc = finddesc("simplesynth");
+  struct synthdesc const* effectdesc = finddesc("reverb4");
   song_init(&song);
   song_load(&song,options->filename);
-  if (!(error_code = player_init(&player,&song))) {
+  if (!(error_code = player_init(&player,&song,synthdesc,effectdesc))) {
     if (!(error_code = audio_io_init(&audio_io,&player,options->output_device))) {
       editor_init(&editor,options->filename,&song,&player);
       editor_run(&editor);

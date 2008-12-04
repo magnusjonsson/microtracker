@@ -8,9 +8,8 @@
 struct player {
   struct song* song;
   char playing;
-  short order_pos;
-  short pat_line;
-  
+  struct songcursor cursor;
+
   int distance_to_next_tick;
 
   pthread_mutex_t mutex;
@@ -23,47 +22,25 @@ struct player {
 
 #define SAMPLES_PER_TICK 4410
 
-int synthdesc_instantiate(struct synthdesc const* synthdesc, double samplerate, void** state) {
-  *state = synthdesc->size ? malloc(synthdesc->size(44100)) : NULL;
-  if (!*state) {
-    fprintf(stderr,"Failed to allocate memory for synth\n");
-    return 1;
-  }
-
-  if (synthdesc->init)
-    synthdesc->init(*state, 44100);
-
-  return 0;
-}
-
-void synthdesc_deinstantiate(struct synthdesc const* synthdesc, void** state) {
-  if (synthdesc) {
-    if (synthdesc->finalize) {
-      synthdesc->finalize(*state);
-      free(*state);
-      *state = NULL;
-    }
-  }
-}
-
-int player_init(struct player* player, struct song* song) {
+int player_init(struct player* player, struct song* song, struct synthdesc const* synthdesc, struct synthdesc const* effectdesc) {
   memset(player,0,sizeof(*player));
+  songcursor_init(&player->cursor);
   if (pthread_mutex_init(&player->mutex,NULL))
     return 1;
   player->song = song;
-  player->synthdesc = finddesc("simplesynth"); // TODO: reclaim synthdesc to make dll unload
+  player->synthdesc = synthdesc;
   
   if (!player->synthdesc) {
-    fprintf(stderr,"Couldn't load organ plugin dll\n");
+    fprintf(stderr,"Couldn't load synth plugin dll\n");
     return 1;
   }
 
   if (synthdesc_instantiate(player->synthdesc,44100,&player->synthstate)) {
-    fprintf(stderr,"Couldn't instantiate organ plugin\n");
+    fprintf(stderr,"Couldn't instantiate synth plugin\n");
     return 1;
   }
 
-  player->effectdesc = finddesc("reverb4");
+  player->effectdesc = effectdesc;
 
   if (!player->effectdesc) {
     fprintf(stderr,"Coudln't load reverb4 plugin dll\n");
@@ -81,6 +58,7 @@ int player_init(struct player* player, struct song* song) {
 
 
 void player_finalize(struct player* player) {
+  songcursor_finalize(&player->cursor);
   pthread_mutex_lock(&player->mutex);
   synthdesc_deinstantiate(player->synthdesc,&player->synthstate);
   player->synthdesc = NULL;
@@ -90,26 +68,14 @@ void player_finalize(struct player* player) {
 }
 
 void player_advance_cursor(struct player* player) {
-  struct song* song = player->song;
-  if (player->pat_line == PAT_LINES - 1) {
-    player->pat_line = 0;
-    if (player->order_pos == 255 || song->order[player->order_pos+1] == END_OF_ORDER) {
-      player->order_pos = 0;
-    }
-    else {
-      ++player->order_pos;
-    }
-  }
-  else {
-    player->pat_line++;
-  }
+  songcursor_advance(&player->cursor, player->song);
 }
 
 double calc_freq(int octave, int degree, int edo) {
   return pow(2,octave+3+(double)degree/edo);
 }
 
-void player_track_handle_event(struct player* player, int track, struct event event, float samplerate) {
+void player_track_handle_event(struct player* player, int track, struct event event) {
   switch(event.cmd) {
   case CMD_NOP:
     break;
@@ -130,10 +96,9 @@ void player_track_handle_event(struct player* player, int track, struct event ev
 }
 
 void player_tick(struct player* player) {
-  struct song* song = player->song;
-  struct event* track_events = song->patterns[song->order[player->order_pos]][player->pat_line];
+  struct event* track_events = song_line(player->song, &player->cursor);
   for(int i=0;i<PAT_TRACKS;i++) {
-    player_track_handle_event(player,i,track_events[i],44100);
+    player_track_handle_event(player,i,track_events[i]);
   }
   player_advance_cursor(player);
 }
@@ -151,8 +116,11 @@ void player_generate_audio_block(struct player* player, float* out_left, float* 
   float* outs[] = { out_left, out_right };
 
   player->synthdesc->process(player->synthstate, length, NULL, outs);
+
+  float const* const ins[] = { outs[0], outs[1] };
+
   if (player->effectdesc && player->effectdesc->process) {
-    player->effectdesc->process(player->effectstate, length, outs, outs);
+    player->effectdesc->process(player->effectstate, length, ins, outs);
   }
 }
 
@@ -218,17 +186,16 @@ void player_stop(struct player* player) {
   pthread_mutex_unlock(&player->mutex);
 }
 
-void player_play_from(struct player* player, int order_pos, int pat_line) {
+void player_play_from(struct player* player, struct songcursor const* cursor) {
   pthread_mutex_lock(&player->mutex);
   player->playing = 1;
-  player->order_pos = order_pos;
-  player->pat_line = pat_line;
+  songcursor_copytofrom(&player->cursor, cursor);
   pthread_mutex_unlock(&player->mutex);
 }
 
 int player_is_at_beginning_of_song(struct player* player) {
   pthread_mutex_lock(&player->mutex);
-  int answer = player->order_pos == 0 && player->pat_line == 0 && player->distance_to_next_tick == 0;
+  int answer = songcursor_is_at_beginning_of_song(&player->cursor) && player->distance_to_next_tick == 0;
   pthread_mutex_unlock(&player->mutex);
   return answer;
 }
