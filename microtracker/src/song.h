@@ -39,10 +39,11 @@ int song_save(struct song* song, const char* filename) {
   if (!f)
     return 1;
   int len = fwrite(song,1,sizeof(*song),f);
+  fclose(f);
   if (len != sizeof(*song)) {
     fprintf(stderr, "Error: Could not save song! The song may not be loadable.\n");
+    return 1;
   }
-  fclose(f);
   return 0;
 }
 
@@ -51,10 +52,11 @@ int song_load(struct song* song, const char* filename) {
   if (!f)
     return 1;
   int len = fread(song,1,sizeof(*song),f);
-  if (len != sizeof(*song)) {
-    fprintf(stderr, "Error: Could not read whole song! The song may not be loaded correctly.\n");
-  }
   fclose(f);
+  if (len != sizeof(*song)) {
+    fprintf(stderr, "Error: Could not read whole song! The song may not be loaded correctly. len = %i\n", len);
+    return 1;
+  }
   return 0;
 }
 
@@ -227,5 +229,9 @@ int songcursor_pattern(struct songcursor const* cursor, struct song const* song)
 }
 
 struct event* song_line(struct song* song, struct songcursor const* cursor) {
+  return song->patterns[song->order[cursor->order_pos]][cursor->pat_line];
+}
+
+struct event const* song_line_readonly(struct song const* song, struct songcursor const* cursor) {
   return song->patterns[song->order[cursor->order_pos]][cursor->pat_line];
 }
