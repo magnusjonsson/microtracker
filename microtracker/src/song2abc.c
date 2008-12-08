@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <getopt.h>
 #include "song.h"
 
 struct voice {
@@ -30,8 +32,34 @@ void reduce_ratio(int* numer, int* denom) {
   }
 }
 
+const char* pitch_class_name(int degree) {
+  switch(degree) {
+  case 0: return "C";
+  case 7: return "Dt";
+  case 8: return "D\\";
+  case 9: return "D";
+  case 14: return "Eb/";
+  case 17: return "E\\";
+  case 18: return "E";
+  case 21: return "F\\";
+  case 22: return "F";
+  case 27: return "F#";
+  case 31: return "G";
+    //  case 32: return "G/";
+  case 34: return "G#t";
+  case 36: return "Ab/";
+  case 39: return "A\\";
+  case 40: return "A";
+  case 48: return "B\\";
+  case 49: return "B";
+  default:
+    fprintf(stderr, "error: don't know the name for pitch degree %i\n", degree);
+    exit(1);
+  }
+}
+
 void emit_pitch(int octave, int degree) {
-  printf("A");
+  printf("[%s%i]", pitch_class_name(degree), octave);
 }
 
 void emit_duration(int duration) {
@@ -52,7 +80,7 @@ void emit_note(int octave, int degree, int duration) {
 }
 
 void emit_rest(int duration) {
-  printf("Z");
+  printf("z");
   emit_duration(duration);
   printf("`");
 }
@@ -105,12 +133,12 @@ void voice_advance(struct voice* voice) {
     voice_stop_last_note_or_rest(voice);
     voice->current_pos = 0;
     voice->note_or_rest_start_pos = 0;
-    printf("|");
+    printf("|\n");
   }
 }
 
 void print_track(struct song const* song, int track) {
-  printf("V%i:\n", track+1);
+  printf("V:%i\n", track+1);
 
   struct songcursor cursor;
   songcursor_init(&cursor);
@@ -141,14 +169,67 @@ void print_track(struct song const* song, int track) {
 
   songcursor_finalize(&cursor);
 
-  printf("\n");
+  printf("%%\n");
+}
+
+struct options {
+  const char* infile;
+  const char* title;
+  const char* composer;
+};
+
+int parse_options(int argc, char** argv, struct options* o) {
+  while(1) {
+    switch(getopt(argc, argv, "T:C:")) {
+    case 'T':
+      o->title = optarg;
+      break;
+    case 'C':
+      o->composer = optarg;
+      break;
+    case -1:
+      if (optind < argc)
+	o->infile = argv[optind];
+      return 0;
+    default:
+      fprintf(stderr, "Error: Bad command line argument\n");
+      fflush(stderr);
+      return 1;
+    }
+  }
 }
 
 int main(int argc, char** argv) {
-  const char* infile = argc >= 2 ? argv[1] : "untitled.song";
+  struct options options = {
+    .infile = "untitled.song",
+    .title = NULL,
+    .composer = NULL,
+  };
+  if (parse_options(argc, argv, &options)) {
+    return 1;
+  }
   struct song song;
   song_init(&song);
-  if (!song_load(&song, infile)) {
+  if (!song_load(&song, options.infile)) {
+    printf("%%%%format sagittal.fmt\n"
+	   "%%%%format sagittal-mixed.fmt\n"
+	   "%%%%postscript sagmixed\n"
+	   "%%%%microabc: procsag:1\n"
+	   "%%%%continueall\n"
+	   "%%%%maxshrink 1.0\n"
+	   "%%%%microabc: equaltemp: 53\n"
+	   "\n"
+	   "X:1\n");
+    if (options.title) {
+      printf("T:%s\n", options.title);
+    }
+    if (options.composer) {
+      printf("C:%s\n", options.composer);
+    }
+    printf("L:1/4\n"
+	   "M:4/4\n"
+	   "K:C\n"
+	   "%%\n");
     for(int track = 0; track < PAT_TRACKS; track++) {
       print_track(&song, track);
     }
