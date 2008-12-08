@@ -35,7 +35,7 @@ void reduce_ratio(int* numer, int* denom) {
 const char* pitch_class_name(int degree) {
   switch(degree) {
   case 0: return "C";
-  case 7: return "Dt";
+  case 7: return "\\\\!D";
   case 8: return "D\\";
   case 9: return "D";
   case 14: return "Eb/";
@@ -45,8 +45,7 @@ const char* pitch_class_name(int degree) {
   case 22: return "F";
   case 27: return "F#";
   case 31: return "G";
-    //  case 32: return "G/";
-  case 34: return "G#t";
+  case 34: return "G#\\\\!";
   case 36: return "Ab/";
   case 39: return "A\\";
   case 40: return "A";
