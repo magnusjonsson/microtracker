@@ -78,6 +78,10 @@ void emit_note(int octave, int degree, int duration) {
   printf("`");
 }
 
+void emit_beam_separator() {
+  printf(" ");
+}
+
 void emit_rest(int duration) {
   printf("z");
   emit_duration(duration);
@@ -106,6 +110,10 @@ void voice_stop_last_note_or_rest(struct voice* voice) {
       emit_rest(subduration);
     voice->note_or_rest_start_pos += subduration;
     voice->is_tie = 1;
+
+    if ((voice->note_or_rest_start_pos & 3) == 0) {
+      emit_beam_separator();
+    }
   }
 }
 
@@ -132,12 +140,14 @@ void voice_advance(struct voice* voice) {
     voice_stop_last_note_or_rest(voice);
     voice->current_pos = 0;
     voice->note_or_rest_start_pos = 0;
-    printf("|\n");
   }
 }
 
-void print_track(struct song const* song, int track) {
-  printf("V:%i\n", track+1);
+void print_track(struct song const* song, int track, const char* clef) {
+  printf("V:%i", track+1);
+  if (clef)
+    printf(" clef=%s", clef);
+  printf("\n");
 
   struct songcursor cursor;
   songcursor_init(&cursor);
@@ -162,6 +172,17 @@ void print_track(struct song const* song, int track) {
     voice_advance(&voice);
 
     songcursor_advance(&cursor, song);
+
+    int pattern_line = songcursor_pattern_line(&cursor);
+    if (pattern_line == 0) {
+      printf("||\n");
+    }
+    else if ((pattern_line & 31) == 0) {
+      printf("|\n");
+    }
+    else if ((pattern_line & 15) == 0) {
+      printf("|");
+    }
   } while(!songcursor_is_at_beginning_of_song(&cursor));
 
   voice_stop_last_note_or_rest(&voice);
@@ -175,16 +196,34 @@ struct options {
   const char* infile;
   const char* title;
   const char* composer;
+  const char* voice_order;
+  const char* notes;
+  int num_clefs;
+  const char* clefs[PAT_TRACKS];
 };
 
 int parse_options(int argc, char** argv, struct options* o) {
   while(1) {
-    switch(getopt(argc, argv, "T:C:")) {
+    switch(getopt(argc, argv, "T:C:v:N:c:")) {
     case 'T':
       o->title = optarg;
       break;
     case 'C':
       o->composer = optarg;
+      break;
+    case 'v':
+      o->voice_order = optarg;
+      break;
+    case 'N':
+      o->notes = optarg;
+      break;
+    case 'c':
+      if (o->num_clefs >= PAT_TRACKS) {
+	fprintf(stderr, "Error: too many clefs\n");
+	fflush(stderr);
+	return 1;
+      }
+      o->clefs[o->num_clefs++] = optarg;
       break;
     case -1:
       if (optind < argc)
@@ -203,6 +242,10 @@ int main(int argc, char** argv) {
     .infile = "untitled.song",
     .title = NULL,
     .composer = NULL,
+    .voice_order = NULL,
+    .notes = NULL,
+    .num_clefs = 0,
+    .clefs = { NULL, NULL, NULL, NULL }
   };
   if (parse_options(argc, argv, &options)) {
     return 1;
@@ -214,9 +257,11 @@ int main(int argc, char** argv) {
 	   "%%%%format sagittal-mixed.fmt\n"
 	   "%%%%postscript sagmixed\n"
 	   "%%%%microabc: procsag:1\n"
-	   "%%%%continueall\n"
-	   "%%%%maxshrink 1.0\n"
+	   //	   "%%%%continueall\n"
+	   "%%%%maxshrink 0.8\n"
 	   "%%%%microabc: equaltemp: 53\n"
+	   "%%%%measurefirst 0\n"
+	   "%%%%barnumbers 1\n"
 	   "\n"
 	   "X:1\n");
     if (options.title) {
@@ -225,12 +270,18 @@ int main(int argc, char** argv) {
     if (options.composer) {
       printf("C:%s\n", options.composer);
     }
+    if (options.notes) {
+      printf("C:%s\n", options.notes);
+    }
     printf("L:1/4\n"
 	   "M:4/4\n"
 	   "K:C\n"
 	   "%%\n");
+    if (options.voice_order) {
+      printf("%%%%score %s\n", options.voice_order);
+    }
     for(int track = 0; track < PAT_TRACKS; track++) {
-      print_track(&song, track);
+      print_track(&song, track, options.clefs[track]);
     }
   }
   song_finalize(&song);
