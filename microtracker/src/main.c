@@ -27,6 +27,7 @@ int parse_options(int argc, char** argv, struct options* o) {
       return 0;
     default:
       fprintf(stderr,"Error: Bad command line argument\n");
+      fflush(stderr);
       return 1;
     }
   }
