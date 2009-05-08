@@ -11,15 +11,25 @@
 struct options {
   int output_device;
   const char* filename;
+  const char* synth;
+  const char* effect;
 };
 
 int parse_options(int argc, char** argv, struct options* o) {
   o->output_device = -1;
   o->filename = "untitled.song";
+  o->synth = "simplesynth";
+  o->effect = "reverb4";
   while(1) {
-    switch(getopt(argc,argv,"O:")) {
+    switch(getopt(argc,argv,"O:s:e:")) {
     case 'O':
       o->output_device = atoi(optarg);
+      break;
+    case 's':
+      o->synth = optarg;
+      break;
+    case 'e':
+      o->effect = optarg;
       break;
     case -1:
       if(optind < argc)
@@ -39,8 +49,8 @@ int run(struct options const* options) {
   struct player player;
   struct audio_io audio_io;
   struct editor editor;
-  struct synthdesc const* synthdesc = finddesc("simplesynth");
-  struct synthdesc const* effectdesc = finddesc("reverb4");
+  struct synthdesc const* synthdesc = finddesc(options->synth);
+  struct synthdesc const* effectdesc = finddesc(options->effect);
   song_init(&song);
   song_load(&song,options->filename);
   if (!(error_code = player_init(&player,&song,synthdesc,effectdesc))) {
