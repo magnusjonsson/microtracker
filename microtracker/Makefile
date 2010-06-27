@@ -7,7 +7,7 @@ GCC_FLAGS = $(OPT_FLAGS) $(INCLUDES) $(WARNING_FLAGS) -std=c99
 
 all : main dump song2abc
 
-MAIN_SRCS = src/main.c src/synths.c src/song.c src/player.c src/util.c
+MAIN_SRCS = src/main.c src/synths.c src/song.c src/player.c src/util.c src/editor.c
 DUMP_SRCS = src/dump.c src/synths.c src/wavwriter.c src/song.c src/player.c src/util.c
 SONG2ABC_SRCS = src/song2abc.c src/synths.c src/song.c src/util.c
 
