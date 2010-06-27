@@ -1,5 +1,5 @@
 #include "synthdesc.h"
-//#include "ms20filter.h"
+#include "shared/onepole.h"
 #include "shared/moogfilter.h"
 #include <strings.h> // bzero
 #include <stdlib.h>
@@ -7,25 +7,28 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define OSCS 1
+#define LPFREQ1 900
+#define LPFREQ2 6000
+
+#define BASE_CUTOFF 500
+#define BRIGHTNESS 2.0
+#define RESONANCE 0.0
+#define GAIN_CORNER 20000
+#define DC_GAIN 0.5
 
 struct voice {
-  //struct ms20filter filterL;
-  //struct ms20filter filterR;
-  struct moogfilter filterL;
-  struct moogfilter filterR;
-  double phase[OSCS];
-  double drift[OSCS];
+  //struct moogfilter filter;
+  double lpstate1;
+  double lpstate2;
+  double phase1;
+  double drift1;
   double gate;
-  double fgain;
-  double phaseinc;
-  double invphaseinc;
+  double freq;
+  double cutoff;
+  double smoothedfreq;
+  double smoothedcutoff;
   double smoothedamp;
   int active;
-};
-enum osctype {
-  saw,
-  thorn
 };
 
 struct synth {
@@ -33,52 +36,51 @@ struct synth {
   double driftdepth;
   double ampattack;
   double amprelease;
+  double freqattack;
+  double filterattack;
+  double filterrelease;
   double whitenoiseamp; // depends on samplerate
   double noiselowpasscoeff;
   double samplerate;
   uint32_t rng_state;
   double bend;
   double invbend;
-  double filterscale;
   double mod;
   double resonance;
   double dcfollower;
-  int osctype;
   int vcftype;
 };
 
 static void init(void* synth, float samplerate) {
   struct synth* s = synth;
-  int i,j;
+  int i;
   for(i=0;i<128;i++) {
     struct voice* v = &s->voice[i];
+    //moogfilter_init(&v->filter);
+    v->phase1=-0.5+rand()*(1.0/(RAND_MAX+1.0));
+    v->drift1=0;
+    v->freq=220;
+    v->cutoff=BRIGHTNESS/8;
+    v->smoothedfreq=220;
+    v->smoothedcutoff=1.0;
     v->gate=0;
-    for(j=0;j<OSCS;j++) {
-      //      ms20filter_init(&v->filterL);
-      //      ms20filter_init(&v->filterR);
-      moogfilter_init(&v->filterL);
-      moogfilter_init(&v->filterR);
-      v->phase[j]=-0.5+rand()*(1.0/(RAND_MAX+1.0));
-      v->drift[j]=0;
-    }
     v->smoothedamp=1.0e-5;
-    v->active = 0;
+    v->active=0;
   }
   s->samplerate = samplerate;
-  s->ampattack = 0.001;
-  s->amprelease = 0.020;
+  s->ampattack = 0.003;
+  s->amprelease = 0.010;
+  s->freqattack = 0.003;
+  s->filterattack = 0.010;
   s->whitenoiseamp = sqrt(samplerate/44100);
-  s->noiselowpasscoeff = 3.141592*2/samplerate;
+  s->noiselowpasscoeff = 5*2*3.141592/samplerate;
   s->bend = 1.0;
   s->invbend = 1.0;
-  s->filterscale=24*(2*3.141592);
-  s->mod = 0.5;
-  s->driftdepth=0.35;
-  s->osctype=saw;
-  s->resonance = 0.125;
+  s->mod = 0.35;
+  s->driftdepth=0.1;
+  s->resonance = RESONANCE;
   s->dcfollower = 1.0e-6;
 }
-
 static void process(void* synth, int length, float const* const* in, float* const* out) {
   struct synth* const s = synth;
   double const whitenoiseamp = s->whitenoiseamp;
@@ -87,7 +89,6 @@ static void process(void* synth, int length, float const* const* in, float* cons
   double const drift_ingain = whitenoiseamp * noiselowpasscoeff * (1.0/32768.0/65536.0);
   double const drift_fbgain = 1-noiselowpasscoeff;
   double const bend = s->bend;
-  double const invbend = s->invbend;
   int rng_state = s->rng_state;
   double ampattackcoeff = 1.0/(s->ampattack*s->samplerate+0.0000001);
   if (ampattackcoeff > 0.5)
@@ -95,7 +96,12 @@ static void process(void* synth, int length, float const* const* in, float* cons
   double ampreleasecoeff = 1.0/(s->amprelease*s->samplerate+0.0000001);
   if (ampreleasecoeff > 0.5)
     ampreleasecoeff = 0.5;
-  int const osctype = s->osctype;
+  double freqattackcoeff = 1.0/(s->freqattack*s->samplerate+0.0000001);
+  if (freqattackcoeff > 0.5)
+    freqattackcoeff = 0.5;
+  double filterattackcoeff = 1.0/(s->filterattack*s->samplerate+0.0000001);
+  if (filterattackcoeff > 0.5)
+    filterattackcoeff = 0.5;
   
   float* restrict outleft=out[0];
   float* restrict outright=out[1];
@@ -104,84 +110,93 @@ static void process(void* synth, int length, float const* const* in, float* cons
     outleft[sample]=1.0e-12;
     outright[sample]=1.0e-12;
   }
+  double const omega2 = LPFREQ2 * 2 * 3.141592 / s->samplerate;
+  double const lpcoeff2 = omega2 / (omega2 + 1);
 
   for(int voiceno=0;voiceno<128;voiceno++) {
     struct voice* restrict v = &s->voice[voiceno];
     if(v->active) {
-      double const phaseinc = v->phaseinc * bend;
-
-      //double const sqrtinvphaseinc = sqrt(v->invphaseinc * invbend);
-      //double const gain = 1;
-      double gain = pow(440.0/(s->samplerate*phaseinc*bend),0.2);
-      //double const gain = sqrt(440.0/(s->samplerate*phaseinc*bend));
-      //double const gain = (440.0/(s->samplerate*phaseinc*bend));
+      double const freq = v->freq * bend;
+      double smoothedfreq = v->smoothedfreq;
 
       double smoothedamp = v->smoothedamp;
-      double gate = v->gate+1.0e-6;
+      double const gate = v->gate+1.0e-6;
       
-      for(int sample = 0; sample<length;sample++) {
-        double oscsL = 1.0e-5;
-        double oscsR = 1.0e-5;
-        
-        for(int j=0;j<OSCS;j++) {
-          double pan = ((voiceno&3)+0.5)/4.0;
+      double const pan = ((voiceno&3)+0.5)/4.0;
+      double const gainL = sqrt(1-pan);
+      double const gainR = sqrt(pan);
           
-          double drift = v->drift[j];
-          drift = (int)rng_state * drift_ingain + drift * drift_fbgain;
-          rng_state = (rng_state * 196314165u) + 907633515u;
-          v->drift[j] = drift;
-          double phase = v->phase[j];
-          double pinc = phaseinc * (1.0+drift*driftdepth);
+      for(int sample = 0; sample<length;sample++) {
+        
+	double drift1 = v->drift1;
+	drift1 = (int)rng_state * drift_ingain + drift1 * drift_fbgain;
+	rng_state = (rng_state * 196314165u) + 907633515u;
+	v->drift1 = drift1;
+	double phase1 = v->phase1;
+	smoothedfreq += (freq - smoothedfreq) * freqattackcoeff * smoothedfreq / 440.0;
+	double phaseinc = smoothedfreq / s->samplerate; 
+	double pinc1 = phaseinc * (1.0+drift1*driftdepth);
+	
+	/*
+	phase1 += pinc1;
+	while (phase1 >= 1.0) { phase1 -= 1; }
+	double osc = phase1;
+	*/
 
-          double osc;
 
-          switch(osctype) {
-          default:
-          case saw:
-            osc = phase+pinc*0.5;
-            phase += pinc;
-            while (phase >= 0.5) {
-              osc -= (phase-0.5) / pinc;
-              phase -= 1;
-            }
-            break;
-          case thorn:
-            phase += pinc;
-            while (phase >= 0.5) {
-              phase -= 1;
-            }
-            osc = phase*phase*4-0.3333333333;
+	/* double osc = phase1 + pinc1*0.5; */
+	/* phase1 += pinc1; */
+	/* while (phase1 >= 1.0) { osc -= (phase1-1.0) / pinc1; phase1 -= 1; } */
+        phase1 += pinc1;
+	double k = -omega2;
+	double ek = exp(k);
+	v->lpstate2 *= ek;
+	{
+	  double c_a = 1-ek;
+	  double c_b = - ek - c_a / k;
+	  double a = phase1;
+	  double b = -pinc1;
 
-            break;
-          }
+	  v->lpstate2 += c_a * a + c_b * b;
+	}
+	while (phase1 >= 1.0) {
+	  double t = (phase1 - 1.0) / pinc1;
+	  v->lpstate2 -= 1 - exp(k*t);
+	  phase1 -= 1.0;
+	}
+	double osc = v->lpstate2 - 0.5;
 
-          v->phase[j]=phase;
-          oscsL += sqrt(1-pan) * osc;
-          oscsR += sqrt(pan) * osc;
-        }
-        double smoothedampdiff = (gate-smoothedamp);
+        double cutoff = s->mod * v->cutoff;
+	v->smoothedcutoff += (cutoff - v->smoothedcutoff) * filterattackcoeff * v->smoothedcutoff / 10000;
+
+	v->phase1=phase1;
+
+        double smoothedampdiff = (gate - smoothedamp);
         double env = smoothedamp+=smoothedampdiff*
           (smoothedampdiff > 0 ? ampattackcoeff : ampreleasecoeff);
 
-        double omega = s->filterscale * s->mod * v->fgain;
-        double resonance = s->resonance;
+        //double const gain = pow(smoothedfreq/440,-GAIN_TRACKING);
 
-        oscsL *= 2;
-        oscsR *= 2;
+	double freq_above_gain = smoothedfreq/GAIN_CORNER;
+	double gain = DC_GAIN / sqrt(1.0 + freq_above_gain * freq_above_gain);
 
-        oscsL = moogfilter_tick(&v->filterL, oscsL, omega, resonance);
-        oscsR = moogfilter_tick(&v->filterR, oscsR, omega, resonance);
+        env *= gain;
+        osc *= env;
+	double brighted_freq = BRIGHTNESS*smoothedfreq;
+	double omega = sqrt(brighted_freq*brighted_freq + BASE_CUTOFF*BASE_CUTOFF) * 2 * 3.1415192 / s->samplerate;
+	//osc = moogfilter_tick(&v->filter, osc, omega, resonance);
+	
+	double lpcoeff1 = omega / (omega + 1); // LPFREQ1 * 2 * 3.141592 / s->samplerate;
+	osc = v->lpstate1 += (osc - v->lpstate1) * lpcoeff1;
+	//osc = v->lpstate2 += (osc - v->lpstate2) * lpcoeff2;
 
-        env *= gain * sqrt(0.05/OSCS);
-        oscsL *= env;
-        oscsR *= env;
-
-        outleft[sample] += oscsL;
-        outright[sample] += oscsR;
+        outleft[sample] += osc * gainL;
+        outright[sample] += osc * gainR;
       }
       
+      v->smoothedfreq = smoothedfreq;
       v->smoothedamp = smoothedamp;
-      if (!v->gate && smoothedamp < 1.0e-4) {
+      if (!v->gate && smoothedamp < 1.0e-6) {
         v->active = 0;
       }
     }
@@ -198,20 +213,17 @@ static void process(void* synth, int length, float const* const* in, float* cons
 static void noteon(void* synth, int key, float freq, float velocity) {
   struct synth* const s = synth;
   struct voice* const v = &s->voice[key];
-  v->phaseinc = freq/s->samplerate;
-  v->invphaseinc = 440.0/44100.0/v->phaseinc;
+  v->freq = freq;
 
-  //v->gate = velocity;
   v->gate = 1.0;
-  float base = 440 * pow(freq / 440, 0.8);
-  v->fgain = base*velocity / s->samplerate;
+  v->cutoff = BRIGHTNESS * velocity;
   v->active=1;
 };
 
 static void noteoff(void* synth, int key) {
   struct synth* const s = synth;
   struct voice* const v = &s->voice[key];
-  v->gate=0;
+  v->gate=0.0;
 };
 
 static void vol(void* synth, float vol) {

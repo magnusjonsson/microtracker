@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <memory.h>
 
+#define SAMPLERATE 48000
+
 #include "song.h"
 #include "player.h"
 #include "wavwriter.h"
@@ -12,12 +14,12 @@ int main(int argc, char** argv) {
   struct song song;
   struct player player;
   struct synthdesc const* synthdesc = finddesc("simplesynth");
-  struct synthdesc const* effectdesc = finddesc("reverb4");
+  struct synthdesc const* effectdesc = finddesc("reverb2");
   song_init(&song);
   song_load(&song,infile);
-  if (!player_init(&player,&song,synthdesc,effectdesc)) {
+  if (!player_init(&player,&song,synthdesc,effectdesc,SAMPLERATE)) {
     player_play(&player);
-    FILE* f = wavwriter_begin(outfile,44100);
+    FILE* f = wavwriter_begin(outfile,SAMPLERATE);
     if (!f) {
       fprintf(stderr,"Error opening file for writing\n");
     }

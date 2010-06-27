@@ -29,13 +29,14 @@ static void init(void* synth, float samplerate) {
   r->length = bufferlength(samplerate);
   r->pos = 0;
   r->phase = 0;
+  r->phaseinc = 1 / samplerate;
   r->lpcoeff = onepole_coeff_for_omega(10000*2*3.141592 / samplerate);
   r->hpcoeff = onepole_coeff_for_omega(30*2*3.141592 / samplerate);
   r->lpstateL = 0;
   r->lpstateR = 0;
   r->hpstateL = 0;
   r->hpstateR = 0;
-  r->phaseinc = 1 / samplerate;
+  memset(r->buffer, 0, sizeof(float) * r->length);
 }
 
 static void finalize(void* synth) {
@@ -112,8 +113,8 @@ static void process(void* synth,int length,float const * const * in, float * con
     *r0 = or * 0.8 + in0[i];
 
     // output
-    out0[i] = in0[i] + ol * 0.25;
-    out1[i] = in1[i] + or * 0.25;
+    out0[i] = in0[i] + ol * 0.3;
+    out1[i] = in1[i] + or * 0.3;
 
     // allpass filters
     float phase = r->phase;

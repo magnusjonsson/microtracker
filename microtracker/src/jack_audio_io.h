@@ -17,7 +17,9 @@ static int jack_process_callback(jack_nframes_t nframes, void* arg)
   float* buffer_right = jack_port_get_buffer(audio_io->jack_port_right_out, nframes);
   if (buffer_right == NULL) return 1;
 
-  player_generate_audio(audio_io->player, buffer_left, buffer_right, nframes);
+  if (audio_io->player != NULL) {
+    player_generate_audio(audio_io->player, buffer_left, buffer_right, nframes);
+  }
   return 0;
 }
 
@@ -64,6 +66,14 @@ int audio_io_init(struct audio_io* audio_io, struct player* player, int device) 
  error:
   audio_io_finalize(audio_io);
   return 1;
+}
+
+int audio_io_get_sample_rate(struct audio_io* audio_io) {
+  return jack_get_sample_rate(audio_io->jack_client);
+}
+
+void audio_io_set_player(struct audio_io* audio_io, struct player* player) {
+  audio_io->player = player;
 }
 
 void audio_io_finalize(struct audio_io* audio_io) {

@@ -67,6 +67,7 @@ static void init(void* synth, float samplerate) {
     v->state10 = 0;
     v->state11 = 0;
     v->amp=1.0e-5;
+    v->smoothedamp=v->amp;
     v->active = 0;
   }
   s->samplerate = samplerate;
@@ -85,6 +86,7 @@ static void init(void* synth, float samplerate) {
   s->releasehfdamping=0.020;
   s->reso0 = 0.0;
   s->reso1 = 0.0;
+  s->driftdepth = 0.01;
 }
 
 static void process(void* synth, int length, float const * const * in, float * const * out) {

@@ -11,6 +11,7 @@ struct player {
   struct songcursor cursor;
 
   int distance_to_next_tick;
+  int samples_per_tick;
 
   pthread_mutex_t mutex;
 
@@ -20,38 +21,33 @@ struct player {
   void* effectstate;
 };
 
-#define SAMPLES_PER_TICK 4410
-
-int player_init(struct player* player, struct song* song, struct synthdesc const* synthdesc, struct synthdesc const* effectdesc) {
+int player_init(struct player* player, struct song* song, struct synthdesc const* synthdesc, struct synthdesc const* effectdesc, int samplerate) {
   memset(player,0,sizeof(*player));
   songcursor_init(&player->cursor);
   if (pthread_mutex_init(&player->mutex,NULL))
     return 1;
   player->song = song;
   player->synthdesc = synthdesc;
+  player->samples_per_tick = samplerate / 12;
   
   if (!player->synthdesc) {
     fprintf(stderr,"Couldn't load synth plugin dll\n");
     return 1;
   }
 
-  if (synthdesc_instantiate(player->synthdesc,44100,&player->synthstate)) {
+  if (synthdesc_instantiate(player->synthdesc,samplerate,&player->synthstate)) {
     fprintf(stderr,"Couldn't instantiate synth plugin\n");
     return 1;
   }
 
   player->effectdesc = effectdesc;
 
-  if (!player->effectdesc) {
-    fprintf(stderr,"Coudln't load reverb4 plugin dll\n");
-    return 1;
+  if (player->effectdesc) {
+    if (synthdesc_instantiate(player->effectdesc,samplerate,&player->effectstate)) {
+      fprintf(stderr,"Couldn't instantiate reverb4 plugin\n");
+      return 1;
+    }
   }
-
-  if (synthdesc_instantiate(player->effectdesc,44100,&player->effectstate)) {
-    fprintf(stderr,"Couldn't instantiate reverb4 plugin\n");
-    return 1;
-  }
-
 
   return 0;
 }
@@ -62,13 +58,20 @@ void player_finalize(struct player* player) {
   pthread_mutex_lock(&player->mutex);
   synthdesc_deinstantiate(player->synthdesc,&player->synthstate);
   player->synthdesc = NULL;
-  synthdesc_deinstantiate(player->effectdesc,&player->effectstate);
-  player->effectdesc = NULL;
+  if (player->effectdesc) {
+    synthdesc_deinstantiate(player->effectdesc,&player->effectstate);
+    player->effectdesc = NULL;
+  }
   pthread_mutex_destroy(&player->mutex);
 }
 
 void player_advance_cursor(struct player* player) {
   songcursor_advance(&player->cursor, player->song);
+}
+
+
+double calc_ji_freq(int octave, int degree) {
+  return (double)(octave+1)/(double)(degree+1);
 }
 
 double calc_freq(int octave, int degree, int edo) {
@@ -100,9 +103,9 @@ double calc_freq(int octave, int degree, int edo) {
   case 49: multiplier = 40.0/21.0; break; // 5/3 * 8/7 = 40/21
   }
   if (multiplier > 0)
-    return pow(2.0, octave+3) * multiplier;
+    return pow(2.0, octave) * multiplier;
   else
-    return pow(2,octave+3+(double)degree/edo);
+    return pow(2,octave+(double)degree/edo);
 }
 
 void player_track_handle_event(struct player* player, int track, struct event event) {
@@ -119,9 +122,20 @@ void player_track_handle_event(struct player* player, int track, struct event ev
       player->synthdesc->noteoff(player->synthstate,track);
     }
     if (player->synthdesc && player->synthdesc->noteon) {
-      double freq = calc_freq(event.octave, event.degree, player->song->octave_divisions);
+      double freq = 8 * calc_freq(event.octave, event.degree, player->song->octave_divisions);
       player->synthdesc->noteon(player->synthstate,track,freq,0.5);
     }
+    break;
+  case CMD_JI_NOTE_ON:
+    if (player->synthdesc && player->synthdesc->noteoff) {
+      player->synthdesc->noteoff(player->synthstate,track);
+    }
+    if (player->synthdesc && player->synthdesc->noteon) {
+      double A4 = 440.0;
+      double freq = A4 * calc_ji_freq(event.octave, event.degree);
+      player->synthdesc->noteon(player->synthstate,track,freq,0.5);
+    }
+    break;
   }
 }
 
@@ -159,7 +173,7 @@ void player_handle_events(struct player* player) {
     return;
   while (player->distance_to_next_tick <= 0) {
     player_tick(player);
-    player->distance_to_next_tick += SAMPLES_PER_TICK;
+    player->distance_to_next_tick += player->samples_per_tick;
   }
 }
 

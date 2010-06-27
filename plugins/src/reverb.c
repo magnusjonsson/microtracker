@@ -93,14 +93,14 @@ static void init(void* synth, float samplerate) {
   int i;
   struct reverbdelayprototype delays[numdelays];
   for (i=0;i<numdelays;i++) {
-    delays[i].gain = sqrt(lengths[i]/0.060*4/numdelays);
+    delays[i].gain = sqrt(lengths[i]/0.060/numdelays);
     delays[i].length = lengths[i]*scale;
-    delays[i].feedback = pow(0.001,delays[i].length/2.5);
-    //delays[i].rotation = twopi*0.5;
+    delays[i].feedback = pow(0.001,lengths[i]/3.0);
+    delays[i].rotation = twopi*0.25 * ((i&1)?-1:1);
     //delays[i].rotation = 2000*sqrt(lengths[i]) * ((i&i)?-1:1);
-    delays[i].rotation=twopi*rand()/(1.0+RAND_MAX);
-    //delays[i].rotation = 0.2*twopi * ((i&i)?-1:1);
-    //delays[i].rotation = 1 * ((i&i)?-1:1);
+    //delays[i].rotation=twopi*rand()/(1.0+RAND_MAX);
+    //delays[i].rotation = 0.2*twopi * ((i&1)?-1:1);
+    //delays[i].rotation = 1 * ((i&1)?-1:1);
     //delays[i].rotation = 1;
   }
   complexinit(r,samplerate,numdelays,delays,1.0e-9);

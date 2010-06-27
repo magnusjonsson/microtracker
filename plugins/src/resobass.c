@@ -2,13 +2,12 @@
 #include "shared/moogfilter.h"
 #include <math.h>
 
-struct synth {
+struct voice {
   struct moogfilter filter;
   double hpstate1;
   double hpstate2;
   double hpcoeff;
   double phase1;
-  double phase2;
   double phaseinc;
   double phaseinctarget;
   double samplerate;
@@ -17,33 +16,37 @@ struct synth {
   double ampenvtarget;
   double cutoffenv;
   double cutoffenvtarget;
-  int lastkey;
   float freqtable[128];
-  float bendcoeff;
+};
+
+struct synth {
+  struct voice voices[128];
   double mod;
   double reso;
+  float bendcoeff;
 };
 
 static void init(void* synth, float samplerate) {
   struct synth* const s = synth;
   //ms20filter_init(&s->filter);
-  moogfilter_init(&s->filter);
-  s->phase1 = 0;
-  s->phase2 = 0;
-  s->hpstate1 = 0;
-  s->hpstate2 = 0;
-  s->hpcoeff = 10.0*2*3.141592/samplerate;
-  s->samplerate = samplerate;
-  s->phaseinctarget = 440.0/samplerate;
-  s->phaseinc = s->phaseinctarget;
-  s->gate = 0;
-  s->ampenv=0;
-  s->ampenvtarget=0;
-  s->cutoffenv=0;
-  s->cutoffenvtarget=0;
-  s->lastkey = -1;
-  s->mod = 0.5;
-  s->reso = 0.6;
+  for (int i = 0; i < 128; i++) {
+    struct voice* v = &s->voices[i];
+    moogfilter_init(&v->filter);
+    v->hpstate1 = 0;
+    v->hpstate2 = 0;
+    v->hpcoeff = 10.0*2*3.141592/samplerate;
+    v->phase1 = 0;
+    v->phaseinctarget = 440.0/samplerate;
+    v->phaseinc = v->phaseinctarget;
+    v->samplerate = samplerate;
+    v->gate = 0;
+    v->ampenv=0;
+    v->ampenvtarget=0;
+    v->cutoffenv=0;
+    v->cutoffenvtarget=0;
+  }
+  s->mod = 0.33;
+  s->reso = 0.0;
   s->bendcoeff = 1.0;
 }
 
@@ -65,65 +68,81 @@ static void process(void* synth, int length, float const* const* in, float * con
   struct synth* const s = synth;
   float* outL = out[0];
   float* outR = out[1];
-  double phase1 = s->phase1;
-  double phase2 = s->phase2;
-  double phaseinctarget = s->phaseinctarget;
-  double phaseinc = s->phaseinc;
-  double hpstate1 = s->hpstate1;
-  double hpstate2 = s->hpstate2;
-  double hpcoeff = s->hpcoeff;
-  double gate = s->gate;
+  
   for(int i=0;i<length;i++) {
-    phaseinc += (phaseinctarget-phaseinc)*500/s->samplerate;
-    double osc =
-      ticksaw(&phase1,phaseinc*s->bendcoeff*0.998);
-    //+ ticksaw(&phase2,phaseinc*s->bendcoeff*2.001);
-    osc -= hpstate1; hpstate1 += osc*hpcoeff;
-    if (gate > 0) {
-      s->cutoffenvtarget -= 1*s->cutoffenvtarget*s->cutoffenvtarget/s->samplerate;
-    }
-    else {
-      s->cutoffenvtarget -= 16*s->cutoffenvtarget*s->cutoffenvtarget/s->samplerate;
-    }
-    s->cutoffenv += (s->cutoffenvtarget-s->cutoffenv) * 500 / s->samplerate;
-    double cutoff = s->cutoffenv * (s->mod*12000 * 2 * 3.141592 / s->samplerate);
-    //double sound = ms20filter_tick(&s->filter, osc, 0, cutoff, s->reso*1.2);
-    osc *= 0.5;
-    double sound = moogfilter_tick(&s->filter, osc, cutoff, s->reso*1.2);
-    if (gate > 0) {
-      s->ampenvtarget *= 1 - 0.2/s->samplerate;
-    }
-    else {
-      s->ampenvtarget *= 1 - 4/s->samplerate;
-    }
-    s->ampenv += (s->ampenvtarget-s->ampenv) * 500 / s->samplerate;
-    double g = s->ampenv * 0.5;
-    sound -= hpstate2; hpstate2 += sound*hpcoeff;
-    sound = tanh(sound*g);
-    outL[i] = sound;
-    outR[i] = sound;
+    outL[i] = 0.0;
+    outR[i] = 0.0;
   }
-  s->phase1 = phase1;
-  s->phase2 = phase2;
-  s->phaseinc = phaseinc;
-  s->hpstate1 = hpstate1;
-  s->hpstate2 = hpstate2;
+
+  for (int j=0;j<128;j++) {
+    
+    struct voice* v = &s->voices[j];
+    
+    double phase1 = v->phase1;
+    double phaseinctarget = v->phaseinctarget;
+    double phaseinc = v->phaseinc;
+    double hpstate1 = v->hpstate1;
+    double hpstate2 = v->hpstate2;
+    double hpcoeff = v->hpcoeff;
+    double gate = v->gate;
+
+    if (gate < 1.0e-5 &&
+	v->ampenvtarget < 1.0e-5 &&
+	v->ampenv < 1.0e-5)
+      continue;
+
+    for(int i=0;i<length;i++) {
+      //phaseinc = phaseinctarget;
+      phaseinc += (phaseinctarget-phaseinc)*500/v->samplerate;
+      double osc =
+	ticksaw(&phase1,phaseinc*s->bendcoeff);
+      osc -= hpstate1; hpstate1 += osc*hpcoeff;
+      if (gate > 0) {
+	v->cutoffenvtarget -= 2*v->cutoffenvtarget*v->cutoffenvtarget/v->samplerate;
+      }
+      else {
+	v->cutoffenvtarget -= 16*v->cutoffenvtarget*v->cutoffenvtarget/v->samplerate;
+      }
+      v->cutoffenv += (v->cutoffenvtarget-v->cutoffenv) * 500 / v->samplerate;
+      double cutoff = v->cutoffenv * (s->mod*12000 * 2 * 3.141592 / v->samplerate);
+      osc *= 0.25;
+      double sound = moogfilter_tick(&v->filter, osc, cutoff, s->reso*1.2);
+      if (gate > 0) {
+	v->ampenvtarget *= 1 - 0.2/v->samplerate;
+      }
+      else {
+	v->ampenvtarget *= 1 - 4/v->samplerate;
+      }
+      //v->ampenv = v->ampenvtarget;
+      v->ampenv += (v->ampenvtarget-v->ampenv) * 500 / v->samplerate;
+      double g = v->ampenv;
+      sound -= hpstate2; hpstate2 += sound*hpcoeff;
+      sound = sound*g;
+      outL[i] += sound;
+      outR[i] += sound;
+    }
+    v->phase1 = phase1;
+    v->phaseinc = phaseinc;
+    v->hpstate1 = hpstate1;
+    v->hpstate2 = hpstate2;
+  }
 }
 static void noteon(void* synth, int key, float freq, float velocity) {
   struct synth* const s = synth;
-  s->phaseinctarget = s->freqtable[key]/s->samplerate;
-  s->ampenvtarget = velocity;
-  //s->ampenvtarget = sqrt(s->ampenvtarget*s->ampenvtarget+velocity*velocity);
-  //s->cutoffenvtarget = sqrt(s->cutoffenvtarget*s->cutoffenvtarget+velocity*velocity);
-  //s->ampenvtarget += velocity;
-  s->cutoffenvtarget = sqrt(velocity);
-  s->gate = velocity;
-  s->lastkey = key;
+  struct voice* v = &s->voices[key];
+
+  v->phaseinctarget = freq/v->samplerate;
+  v->ampenvtarget = velocity;
+  //v->ampenvtarget = sqrt(v->ampenvtarget*v->ampenvtarget+velocity*velocity);
+  //v->cutoffenvtarget = sqrt(v->cutoffenvtarget*v->cutoffenvtarget+velocity*velocity);
+  //v->ampenvtarget += velocity;
+  v->cutoffenvtarget = sqrt(velocity);
+  v->gate = velocity;
 }
 static void noteoff(void* synth, int key) {
   struct synth* const s = synth;
-  if (key == s->lastkey)
-    s->gate = 0;
+  struct voice* v = &s->voices[key];
+  v->gate = 0;
 }
 static void vol(void* synth, float vol) {
   struct synth* const s = synth;

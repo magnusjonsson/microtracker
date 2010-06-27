@@ -34,7 +34,7 @@ int synthdesc_instantiate(struct synthdesc const* synthdesc, double samplerate, 
   }
 
   if (synthdesc->init)
-    synthdesc->init(*state, 44100);
+    synthdesc->init(*state, samplerate);
 
   return 0;
 }

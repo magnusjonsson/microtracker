@@ -93,7 +93,7 @@ static void init(void* synth, float samplerate) {
   int i;
   struct reverbdelayprototype delays[numdelays];
   for (i=0;i<numdelays;i++) {
-    delays[i].shape = 0.005;
+    delays[i].shape = 0.003;
     delays[i].length = lengths[i]*scale;
     //delays[i].rotation = twopi*0.5;
     //delays[i].rotation = 2000*sqrt(lengths[i]) * ((i&i)?-1:1);
@@ -102,7 +102,7 @@ static void init(void* synth, float samplerate) {
     //delays[i].rotation = 1 * ((i&i)?-1:1);
     //delays[i].rotation = 1;
   }
-  complexinit(r,samplerate,numdelays,delays,0.0000000000000000000000000000001);
+  complexinit(r,samplerate,numdelays,delays,1.0e-28);
 }
 
 static void reverbdelay_finalize(struct reverbdelay* r) {

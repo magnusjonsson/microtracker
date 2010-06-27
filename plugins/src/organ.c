@@ -28,10 +28,10 @@ void init(void* s, float samplerate) {
   struct organ* o = s;
   o->samplerate=samplerate;
   o->reedfactor = 0;
-  o->reflectionfactor = 0.5;
-  o->airfactor = 6;
+  o->reflectionfactor = 0.6;
+  o->airfactor = 6.0;
   o->dckillerstate = 1.0e-9;
-  o->dckillercoeff = 6.28*50/samplerate;
+  o->dckillercoeff = 6.28*200/samplerate;
   int memory_size = (int) (samplerate * 1) * sizeof(float);
   o->memory_start = calloc(memory_size,1);
   o->memory_stop = o->memory_start + memory_size;

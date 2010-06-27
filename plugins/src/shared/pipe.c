@@ -11,11 +11,11 @@ static void calcdelaylength(float samplerate, float frequency,
     length_in_samples*=2;
     frequency*=0.5;
   }
-  length_in_samples -= 0.35;
+  length_in_samples -= 0.25;
 
   int whole_length = (int)(length_in_samples);
   float frac_length = length_in_samples-whole_length;
-  while(frac_length < 0.5 && whole_length > 1) {
+  while(frac_length < 0.2 && whole_length > 1) {
     frac_length++;
     whole_length--;
   }
@@ -47,15 +47,12 @@ void pipe_init(struct pipe *p, float samplerate, float frequency,
   p->fd_coeff = thiran1_coeff(frac_length);
   delay_init(&p->delay,whole_length,memory);
 
-  onepole_init(&p->reflectionfilter, 1);
-  onepole_init(&p->reedfilter, 1);
-
   float omega = 2*3.141592*frequency/samplerate;
 
-  onepole_setcoeff(&p->airlossfilter1, onepole_coeff_for_omega(omega*airfactor));
-  onepole_setcoeff(&p->airlossfilter2, onepole_coeff_for_omega(omega*airfactor));
-  onepole_setcoeff(&p->reflectionfilter, onepole_coeff_for_omega(omega*reflectionfactor));
-  onepole_setcoeff(&p->reedfilter, onepole_coeff_for_omega(omega*reedfactor));
+  onepole_init(&p->airlossfilter1, onepole_coeff_for_omega(omega*airfactor));
+  onepole_init(&p->airlossfilter2, onepole_coeff_for_omega(omega*airfactor));
+  onepole_init(&p->reflectionfilter, onepole_coeff_for_omega(omega*reflectionfactor));
+  onepole_init(&p->reedfilter, onepole_coeff_for_omega(omega*reedfactor));
   
   p->gain = 1.0/sqrt(frequency/440);
   p->airflow = 1.0e-6f;

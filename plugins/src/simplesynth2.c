@@ -1,16 +1,17 @@
 #include "synthdesc.h"
-#include "ms20filter.h"
+#include "moogfilter2.h"
 #include <strings.h> // bzero
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 
-#define OSCS 1
+#define OSCS 3
+
+double detune[OSCS] = { 1.0, 1.001, 0.998951, 1.00181982, 0.9981823, 1.00092381, 0.9991238 };
 
 struct voice {
-  struct ms20filter filterL;
-  struct ms20filter filterR;
+  struct moogfilter2 filter;
   double phase[OSCS];
   double drift[OSCS];
   double gate;
@@ -50,8 +51,7 @@ static void init(void* synth, float samplerate) {
     struct voice* v = &s->voice[i];
     v->gate=0;
     for(j=0;j<OSCS;j++) {
-      ms20filter_init(&v->filterL);
-      ms20filter_init(&v->filterR);
+      moogfilter2_init(&v->filter);
       v->phase[j]=-0.5+rand()*(1.0/(RAND_MAX+1.0));
       v->drift[j]=0;
     }
@@ -59,16 +59,16 @@ static void init(void* synth, float samplerate) {
     v->active = 0;
   }
   s->samplerate = samplerate;
-  s->ampattack = 0.001;
+  s->ampattack = 0.003;
   s->amprelease = 0.020;
   s->whitenoiseamp = sqrt(samplerate/44100);
-  s->noiselowpasscoeff = 3.141592*2/samplerate;
+  s->noiselowpasscoeff = 2*3.141592*2/samplerate;
   s->bend = 1.0;
   s->invbend = 1.0;
-  s->filterscale=8*(2*3.141592);
-  s->driftdepth=0.35;
+  s->filterscale=14*(2*3.141592);
+  s->driftdepth=0.05;
   s->osctype=saw;
-  s->resonance = 0.0;
+  s->resonance = 0.5;
   s->dcfollower = 1.0e-6;
 }
 
@@ -113,31 +113,31 @@ static void process(void* synth, int length, float const* const* in, float* cons
       double gate = v->gate+1.0e-6;
       
       for(int sample = 0; sample<length;sample++) {
-        double oscsL = 1.0e-5;
-        double oscsR = 1.0e-5;
-        
+        double oscs = 1.0e-5;
+
         for(int j=0;j<OSCS;j++) {
-          //          double pan = (j+0.5)*(1.0/OSCS);
-          double pan = (0.5+(voiceno&3))*(1.0/4.0);
-          
+	  /*
           double drift = v->drift[j];
           drift = (int)rng_state * drift_ingain + drift * drift_fbgain;
           rng_state = (rng_state * 196314165u) + 907633515u;
           v->drift[j] = drift;
+	  */
           double phase = v->phase[j];
-          double pinc = phaseinc * (1.0+drift*driftdepth);
+          double pinc = phaseinc /* * (1.0+drift*driftdepth)*/ * detune[j];
 
           double osc;
 
           switch(osctype) {
           default:
           case saw:
-            osc = phase+pinc*0.5;
-            phase += pinc;
-            while (phase >= 0.5) {
-              osc -= (phase-0.5) / pinc;
-              phase -= 1;
-            }
+	    { double v1 = phase*phase;
+	      phase += pinc;
+	      while (phase >= 0.5) {
+		phase -= 1;
+	      }
+	      double v2 = phase*phase;
+	      osc = (v2-v1) / pinc;
+	    }
             break;
           case thorn:
             phase += pinc;
@@ -150,27 +150,29 @@ static void process(void* synth, int length, float const* const* in, float* cons
           }
 
           v->phase[j]=phase;
-          double gainL = sqrt(1-pan);
-          double gainR = sqrt(pan);
-          oscsL += gainL * osc;
-          oscsR += gainR * osc;
+          oscs += osc;
         }
         double smoothedampdiff = (gate-smoothedamp);
         double env = smoothedamp+=smoothedampdiff*
           (smoothedampdiff > 0 ? ampattackcoeff : ampreleasecoeff);
 
         double omega = s->filterscale * v->fgain;
+	v->fgain -= v->fgain * v->fgain * 0.02;
         double resonance = s->resonance;
-
-        oscsL = ms20filter_tick(&v->filterL, oscsL, 0, omega, resonance);
-        oscsR = ms20filter_tick(&v->filterR, oscsR, 0, omega, resonance);
+	
+	oscs = 4*moogfilter2_tick(&v->filter, oscs, omega, resonance);
 
         env *= gain * sqrt(0.01/OSCS);
-        oscsL *= env;
-        oscsR *= env;
+        oscs *= env;
+	double pan = (0.5+(voiceno&3))*(1.0/4.0);
+	double gainL = (1-pan);
+	double gainR = (pan);
+	double makeupGain = 1.0/sqrt(gainL*gainL+gainR*gainR);
+	gainL *= makeupGain;
+	gainR *= makeupGain;
 
-        outleft[sample] += oscsL;
-        outright[sample] += oscsR;
+        outleft[sample] += oscs * gainL;
+        outright[sample] += oscs * gainR;
       }
       
       v->smoothedamp = smoothedamp;
@@ -182,7 +184,7 @@ static void process(void* synth, int length, float const* const* in, float* cons
   for(int sample = 0; sample<length;sample++) {
     outleft[sample] -= s->dcfollower;
     outright[sample] -= s->dcfollower;
-    s->dcfollower += (outleft[sample]+outright[sample])*0.5*120/s->samplerate;
+    s->dcfollower += ((outleft[sample]+outright[sample])*0.5 - s->dcfollower)*0.5*20/s->samplerate;
   }
     
   s->rng_state = rng_state;
@@ -196,7 +198,7 @@ static void noteon(void* synth, int key, float freq, float velocity) {
 
   //v->gate = velocity;
   v->gate = 1.0;
-  float base = 440 * pow(freq / 440, 0.2);
+  float base = 440 * pow(freq / 440, 0.5);
   v->fgain=base*velocity / s->samplerate;
   v->active=1;
 };

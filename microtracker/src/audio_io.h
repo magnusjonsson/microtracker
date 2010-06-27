@@ -76,7 +76,7 @@ int audio_io_init(struct audio_io* audio_io, struct player* player, int device) 
   if (Pa_OpenStream(&audio_io->stream,
                     NULL, // &inputParameters, // we don't need input
                     &outputParameters,
-                    44100,
+                    SAMPLERATE,
                     256,        /* frames per buffer, i.e. the number
                                    of sample frames that PortAudio will
                                    request from the callback */
