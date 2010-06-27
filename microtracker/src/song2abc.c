@@ -145,7 +145,7 @@ void voice_advance(struct voice* voice) {
   }
 }
 
-void print_track(struct song const* song, int track, const char* clef) {
+void print_track(struct song* song, int track, const char* clef) {
   printf("V:%i", track+1);
   if (clef)
     printf(" clef=%s", clef);
@@ -158,7 +158,7 @@ void print_track(struct song const* song, int track, const char* clef) {
   voice_init(&voice);
 
   do {
-    struct event const* event = &song_line_readonly(song, &cursor)[track];
+    struct event const* event = &song_line(song, &cursor)[track];
 
     switch(event->cmd) {
     case CMD_NOP:

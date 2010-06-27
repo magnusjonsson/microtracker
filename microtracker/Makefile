@@ -7,9 +7,9 @@ GCC_FLAGS = $(OPT_FLAGS) $(INCLUDES) $(WARNING_FLAGS) -std=c99
 
 all : main dump song2abc
 
-MAIN_SRCS = src/main.c src/synths.c src/song.c
-DUMP_SRCS = src/dump.c src/synths.c src/wavwriter.c src/song.c
-SONG2ABC_SRCS = src/song2abc.c src/synths.c src/song.c
+MAIN_SRCS = src/main.c src/synths.c src/song.c src/player.c src/util.c
+DUMP_SRCS = src/dump.c src/synths.c src/wavwriter.c src/song.c src/player.c src/util.c
+SONG2ABC_SRCS = src/song2abc.c src/synths.c src/song.c src/util.c
 
 main : $(MAIN_SRCS:.c=.o)
 	gcc $^ -o $@ -lncurses -lm -ljack -lpthread -ldl

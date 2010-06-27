@@ -1,4 +1,5 @@
 #include <ncurses.h>
+#include "util.h"
 
 #define MODE_EDO 0
 #define MODE_JI 1
@@ -104,11 +105,11 @@ void editor_redraw(struct editor* editor) {
   wrefresh(editor->win);
 }
 
-int editor_current_pattern(struct editor* editor) {
+int editor_get_current_pattern(struct editor* editor) {
   return songcursor_pattern(&editor->cursor,editor->song);
 }
 
-struct event* editor_current_event_ptr(struct editor* editor) {
+struct event* editor_get_current_event_ptr(struct editor* editor) {
   struct event* line = song_line(editor->song,&editor->cursor);
   return &line[editor->pat_track];
 }
@@ -122,41 +123,66 @@ void editor_move_pat_line(struct editor* editor,int delta) {
 }
 
 void editor_enter_note_on(struct editor* editor,int octave,int diatonic) {
-  struct event* event = editor_current_event_ptr(editor);
+  struct event* event = editor_get_current_event_ptr(editor);
+  player_begin_song_edit(editor->player);
   event->cmd = CMD_NOTE_ON;
   event->octave = octave;
   event->degree = editor->table[diatonic];
+  player_end_song_edit(editor->player);
   editor_move_pat_line(editor,1);
 }
 
 void editor_enter_ji_note_on(struct editor* editor) {
-  struct event* event = editor_current_event_ptr(editor);
+  struct event* event = editor_get_current_event_ptr(editor);
+  player_begin_song_edit(editor->player);
   event->cmd = CMD_JI_NOTE_ON;
   event->octave = editor->numer - 1;
   event->degree = editor->denom - 1;
+  player_end_song_edit(editor->player);
   editor_move_pat_line(editor,1);
 }
 
+void editor_enter_note_off(struct editor* editor) {
+  struct event* event = editor_get_current_event_ptr(editor);
+  player_begin_song_edit(editor->player);
+  event->cmd = CMD_NOTE_OFF;
+  player_end_song_edit(editor->player);
+  editor_move_pat_line(editor,1);
+}
+
+void editor_enter_nop(struct editor* editor) {
+  struct event* event = editor_get_current_event_ptr(editor);
+  player_begin_song_edit(editor->player);
+  event->cmd = CMD_NOP;
+  player_end_song_edit(editor->player);
+  editor_move_pat_line(editor,1);
+}
 
 void editor_insert_order(struct editor* editor) {
   struct song* song = editor->song;
+  player_begin_song_edit(editor->player);
   song_insert_order(song,songcursor_order_pos(&editor->cursor));
+  player_end_song_edit(editor->player);
   editor_move_order_pos(editor,1);
 }
 
 void editor_delete_order(struct editor* editor) {
   struct song* song = editor->song;
+  player_begin_song_edit(editor->player);
   song_delete_order(song,songcursor_order_pos(&editor->cursor));
+  player_end_song_edit(editor->player);
   songcursor_normalize(&editor->cursor,song);
 }
 
 void editor_increment_order(struct editor* editor,int delta) {
+  player_begin_song_edit(editor->player);
   song_increment_order(editor->song,songcursor_order_pos(&editor->cursor),delta);
+  player_end_song_edit(editor->player);
 }
 
 void editor_transpose(struct editor* editor,int delta) {
   struct song* song = editor->song;
-  struct event* event = editor_current_event_ptr(editor);
+  struct event* event = editor_get_current_event_ptr(editor);
   int degree = event->degree + delta;
   int octave = event->octave;
   while (degree < 0) {
@@ -171,16 +197,20 @@ void editor_transpose(struct editor* editor,int delta) {
     octave = 0;
   if (octave > 7)
     octave = 7;
+  player_begin_song_edit(editor->player);
   event->octave = octave;
   event->degree = degree;
+  player_end_song_edit(editor->player);
 }
 
 void editor_uniquify_pattern(struct editor* editor) {
+  player_begin_song_edit(editor->player);
   song_uniquify_pattern_at_order_pos(editor->song,songcursor_order_pos(&editor->cursor));
+  player_end_song_edit(editor->player);
 }
 
 void editor_grab_note_degree(struct editor* editor) {
-  struct event* event = editor_current_event_ptr(editor);
+  struct event* event = editor_get_current_event_ptr(editor);
   if (event->cmd != CMD_NOTE_ON)
     return;
   int ch = getch();
@@ -288,20 +318,18 @@ int editor_handle_key(struct editor* editor) {
   case KEY_NPAGE: editor_move_pat_line(editor,16); break;
   case KEY_BTAB:
   case KEY_LEFT:
-    editor->pat_track = wrap(editor->pat_track - 1,PAT_TRACKS);
+    editor->pat_track = util_wrap(editor->pat_track - 1,PAT_TRACKS);
     break;
   case '\t':
   case KEY_RIGHT:
-    editor->pat_track = wrap(editor->pat_track + 1,PAT_TRACKS);
+    editor->pat_track = util_wrap(editor->pat_track + 1,PAT_TRACKS);
     break;
   case '`':
   case ' ':
-    editor_current_event_ptr(editor)->cmd = CMD_NOTE_OFF;
-    editor_move_pat_line(editor,1);
+    editor_enter_note_off(editor);
     break;
   case KEY_DC:
-    editor_current_event_ptr(editor)->cmd = CMD_NOP;
-    editor_move_pat_line(editor,1);
+    editor_enter_nop(editor);
     break;
   case '{': editor_delete_order(editor);  break;
   case '}': editor_insert_order(editor);  break;
@@ -319,6 +347,7 @@ int editor_handle_key(struct editor* editor) {
       break;
     }
     if (ch == KEY_F(3)) {
+      player_stop(editor->player);
       song_load(editor->song,editor->filename);
       break;
     }

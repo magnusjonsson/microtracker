@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <memory.h>
 #include "song.h"
+#include "util.h"
+
 void song_init(struct song* song) {
   memset(song,0,sizeof(*song));
   for(int i=0;i<MAX_ORDER_LENGTH;i++)
@@ -137,17 +139,9 @@ void songcursor_move_pat_line(struct songcursor* cursor, struct song const* song
   cursor->pat_line = line;
 }
 
-int wrap(int line, int modulo) {
-  while(line < 0)
-    line += modulo;
-  while(line >= modulo)
-    line -= modulo;
-  return line;
-}
-
 void song_increment_order(struct song* song, int order_pos, int delta) {
   uint8_t* order = song->order;
-  order[order_pos] = wrap(order[order_pos] + delta, END_OF_ORDER);
+  order[order_pos] = util_wrap(order[order_pos] + delta, END_OF_ORDER);
 }
 
 void songcursor_normalize(struct songcursor* cursor, struct song const* song) {
@@ -198,10 +192,11 @@ int songcursor_pattern(struct songcursor const* cursor, struct song const* song)
   return song->order[cursor->order_pos];
 }
 
+void song_get_line_events(struct song* song, struct songcursor const* cursor, struct event* out_events) {
+  memcpy(out_events, &song->patterns[song->order[cursor->order_pos]][cursor->pat_line], PAT_TRACKS * sizeof(struct event));
+}
+
 struct event* song_line(struct song* song, struct songcursor const* cursor) {
   return song->patterns[song->order[cursor->order_pos]][cursor->pat_line];
 }
 
-struct event const* song_line_readonly(struct song const* song, struct songcursor const* cursor) {
-  return song->patterns[song->order[cursor->order_pos]][cursor->pat_line];
-}

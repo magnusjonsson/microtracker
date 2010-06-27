@@ -1,17 +1,11 @@
+#ifndef SONG_H_INCLUDED
+#define SONG_H_INCLUDED
+
 #include <stdint.h>
+#include "event.h"
 
 #define PAT_LINES 64
 #define PAT_TRACKS 4
-
-struct event {
-#define CMD_NOP 0
-#define CMD_NOTE_OFF 1
-#define CMD_NOTE_ON 2
-#define CMD_JI_NOTE_ON 3
-  uint8_t cmd;
-  uint8_t octave;
-  uint8_t degree;
-};
 
 typedef struct event pattern[PAT_LINES][PAT_TRACKS];
 
@@ -58,5 +52,8 @@ int songcursor_order_pos(struct songcursor const* cursor);
 int songcursor_pattern_line(struct songcursor const* cursor);
 int songcursor_pattern(struct songcursor const* cursor, struct song const* song);
 
+void song_get_line_events(struct song* song, struct songcursor const* cursor, struct event* out_events);
+
 struct event* song_line(struct song* song, struct songcursor const* cursor);
-struct event const* song_line_readonly(struct song const* song, struct songcursor const* cursor);
+
+#endif
