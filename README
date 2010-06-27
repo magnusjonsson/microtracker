@@ -1,15 +1,14 @@
-Microtracker is a program for composing four-channel music in 53-tone equal temperament. The scope of the program is intentionally kept narrow in order to avoid complexity and distraction. The guideline for the user interface is directness -- no menus.
+Microtracker is a program for composing four-channel music in 53-tone equal temperament and just intonation. The program is intentionally kept simple to avoid complexity and distractions. The user interface is keyboard-based and direct, allowing operation via muscle memory so that the user can concentrate on the creative process.
 
-To build on Linux:
-1) Install portaudio v19
+Build instructions for linux:
+1) Install jack
 2) cd plugins
    make
    cd ../microtracker
    make
 
-To build on Windows using Cygwin:
-1) Install gcc, make, ncurses-dev using Cygwin's setup.exe
-2) Download the v19 trunk of portaudio and build and install it
-3) Follow step 2 of the linux build instructions
+How to run it:
+1) cd microtracker
+2) ./main
 
-To see key bindings, look at microtracker/src/editor.h.
+Key bindings are defined in microtracker/src/editor.c.
