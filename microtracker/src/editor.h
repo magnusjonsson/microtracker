@@ -4,6 +4,7 @@
 
 #define MODE_EDO 0
 #define MODE_JI 1
+#define MODE_31_EDO 2
 
 struct editor {
   const char* filename;
@@ -12,7 +13,6 @@ struct editor {
   WINDOW* win;
   struct songcursor cursor;
   short pat_track;
-  int table[7];
   int numer;
   int denom;
   int tuning_mode;

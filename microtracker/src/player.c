@@ -57,33 +57,36 @@ static double calc_ji_freq(int octave, int degree) {
   return (double)(octave+1)/(double)(degree+1);
 }
 
+
 static double calc_freq(int octave, int degree, int edo) {
   double multiplier = 0.0;
-  switch(degree) {
-  case 0: multiplier = 1.0; break;
-  case 7: multiplier = 35/32.0; break;
-  case 8: multiplier = 10.0/9.0; break;
-  case 9: multiplier = 9.0/8.0; break;
-  case 14: multiplier = 6.0/5.0; break;
-  case 17: multiplier = 5.0/4.0; break;
-  case 18: multiplier = 80.0/63.0; break; // 10/9 * 8/7 = 80/63
-  case 21: multiplier = 21.0/16.0; break;
-  case 22: multiplier = 4.0/3.0; break;
-  case 24: multiplier = 11.0/8.0; break;
-  case 25: multiplier = 25.0/18.0; break; // 5/3 * 5/3 * 1/2
-  case 26: multiplier = 45.0/32.0; break;
-  case 29: multiplier = 35.0/24.0; break; // is there a better use? 16/11?
-  case 31: multiplier = 3.0/2.0; break;
-  case 34: multiplier = 25.0/16.0; break;
-  case 36: multiplier = 8.0/5.0; break;
-  case 37: multiplier = 13.0/8.0; break;
-  case 39: multiplier = 5.0/3.0; break;
-  case 40: multiplier = 27.0/16.0; break;
-  case 43: multiplier = 7.0/4.0; break;
-  case 44: multiplier = 16.0/9.0; break;
-  case 45: multiplier = 9.0/5.0; break;
-  case 48: multiplier = 15.0/8.0; break;
-  case 49: multiplier = 40.0/21.0; break; // 5/3 * 8/7 = 40/21
+  if (edo == 53) {
+    switch(degree) {
+    case 0: multiplier = 1.0; break;
+    case 7: multiplier = 35/32.0; break;
+    case 8: multiplier = 10.0/9.0; break;
+    case 9: multiplier = 9.0/8.0; break;
+    case 14: multiplier = 6.0/5.0; break;
+    case 17: multiplier = 5.0/4.0; break;
+    case 18: multiplier = 80.0/63.0; break; // 10/9 * 8/7 = 80/63
+    case 21: multiplier = 21.0/16.0; break;
+    case 22: multiplier = 4.0/3.0; break;
+    case 24: multiplier = 11.0/8.0; break;
+    case 25: multiplier = 25.0/18.0; break; // 5/3 * 5/3 * 1/2
+    case 26: multiplier = 45.0/32.0; break;
+    case 29: multiplier = 35.0/24.0; break;
+    case 31: multiplier = 3.0/2.0; break;
+    case 34: multiplier = 25.0/16.0; break;
+    case 36: multiplier = 8.0/5.0; break;
+    case 37: multiplier = 13.0/8.0; break;
+    case 39: multiplier = 5.0/3.0; break;
+    case 40: multiplier = 27.0/16.0; break;
+    case 43: multiplier = 7.0/4.0; break;
+    case 44: multiplier = 16.0/9.0; break;
+    case 45: multiplier = 9.0/5.0; break;
+    case 48: multiplier = 15.0/8.0; break;
+    case 49: multiplier = 40.0/21.0; break; // 5/3 * 8/7 = 40/21
+    }
   }
   if (multiplier > 0)
     return pow(2.0, octave) * multiplier;
@@ -105,7 +108,7 @@ void player_track_handle_event(struct player* player, int track, struct event ev
       player->synthdesc->noteoff(player->synthstate,track);
     }
     if (player->synthdesc && player->synthdesc->noteon) {
-      double freq = 8 * calc_freq(event.octave, event.degree, player->song->octave_divisions);
+      double freq = 8 * calc_freq(event.octave, event.degree, 53);
       player->synthdesc->noteon(player->synthstate,track,freq,0.5);
     }
     break;
@@ -116,6 +119,15 @@ void player_track_handle_event(struct player* player, int track, struct event ev
     if (player->synthdesc && player->synthdesc->noteon) {
       double A4 = 440.0;
       double freq = A4 * calc_ji_freq(event.octave, event.degree);
+      player->synthdesc->noteon(player->synthstate,track,freq,0.5);
+    }
+    break;
+  case CMD_31_EDO_NOTE_ON:
+    if (player->synthdesc && player->synthdesc->noteoff) {
+      player->synthdesc->noteoff(player->synthstate,track);
+    }
+    if (player->synthdesc && player->synthdesc->noteon) {
+      double freq = 8 * calc_freq(event.octave, event.degree, 31);
       player->synthdesc->noteon(player->synthstate,track,freq,0.5);
     }
     break;

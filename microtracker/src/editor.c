@@ -15,14 +15,6 @@ void editor_init(struct editor* editor,const char* filename,struct song* song,st
   keypad(stdscr,TRUE);
   editor->win = stdscr;
   wrefresh(editor->win);
-
-  editor->table[0] = 0;
-  editor->table[1] = 9;
-  editor->table[2] = 17;
-  editor->table[3] = 22;
-  editor->table[4] = 31;
-  editor->table[5] = 39;
-  editor->table[6] = 48;
   editor->numer = 1;
   editor->denom = 1;
   editor->tuning_mode = MODE_JI;
@@ -73,6 +65,13 @@ void editor_redraw(struct editor* editor) {
           wprintw(editor->win,buffer);
 	  break;
 	}
+      case CMD_31_EDO_NOTE_ON:
+	{
+	  char buffer[9];
+	  snprintf(buffer,9,"%i:%i",event.octave,event.degree);
+          wprintw(editor->win,buffer);
+	  break;
+	}
       default: wprintw(editor->win,"???"); break;
       }
     }
@@ -109,12 +108,24 @@ void editor_move_pat_line(struct editor* editor,int delta) {
   songcursor_move_pat_line(&editor->cursor,editor->song,delta);
 }
 
+static int diatonic_table_53_edo[7] = { 0, 9, 17, 22, 31, 39, 48 };
+static int diatonic_table_31_edo[7] = { 0, 5, 10, 13, 18, 23, 28 };
+
 void editor_enter_note_on(struct editor* editor,int octave,int diatonic) {
   struct event* event = editor_get_current_event_ptr(editor);
   player_begin_song_edit(editor->player);
-  event->cmd = CMD_NOTE_ON;
-  event->octave = octave;
-  event->degree = editor->table[diatonic];
+  switch (editor->tuning_mode) {
+  case MODE_EDO:
+    event->cmd = CMD_NOTE_ON;
+    event->octave = octave;
+    event->degree = diatonic_table_53_edo[diatonic];
+    break;
+  case MODE_31_EDO:
+    event->cmd = CMD_31_EDO_NOTE_ON;
+    event->octave = octave;
+    event->degree = diatonic_table_31_edo[diatonic];
+    break;
+  }
   player_end_song_edit(editor->player);
   editor_move_pat_line(editor,1);
 }
@@ -168,16 +179,22 @@ void editor_increment_order(struct editor* editor,int delta) {
 }
 
 void editor_transpose(struct editor* editor,int delta) {
-  struct song* song = editor->song;
   struct event* event = editor_get_current_event_ptr(editor);
   int degree = event->degree + delta;
   int octave = event->octave;
+  int octave_divisions;
+  switch (event->cmd) {
+  case CMD_NOTE_ON: octave_divisions = 53; break;
+  case CMD_31_EDO_NOTE_ON: octave_divisions = 31; break;
+  default:
+    return;
+  }
   while (degree < 0) {
-    degree += song->octave_divisions;
+    degree += octave_divisions;
     octave -= 1;
   }
-  while (degree >= song->octave_divisions) {
-    degree -= song->octave_divisions;
+  while (degree >= octave_divisions) {
+    degree -= octave_divisions;
     octave += 1;
   }
   if (octave < 0)
@@ -194,49 +211,6 @@ void editor_uniquify_pattern(struct editor* editor) {
   player_begin_song_edit(editor->player);
   song_uniquify_pattern_at_order_pos(editor->song,songcursor_order_pos(&editor->cursor));
   player_end_song_edit(editor->player);
-}
-
-void editor_grab_note_degree(struct editor* editor) {
-  struct event* event = editor_get_current_event_ptr(editor);
-  if (event->cmd != CMD_NOTE_ON)
-    return;
-  int ch = getch();
-  int diatonic = -1;
-  switch(ch) {
-  case '1': diatonic = 0; break;
-  case '2': diatonic = 1; break;
-  case '3': diatonic = 2; break;
-  case '4': diatonic = 3; break;
-  case '5': diatonic = 4; break;
-  case '6': diatonic = 5; break;
-  case '7': diatonic = 6; break;
-  case 'q': diatonic = 0; break;
-  case 'w': diatonic = 1; break;
-  case 'e': diatonic = 2; break;
-  case 'r': diatonic = 3; break;
-  case 't': diatonic = 4; break;
-  case 'y': diatonic = 5; break;
-  case 'u': diatonic = 6; break;
-  case 'a': diatonic = 0; break;
-  case 's': diatonic = 1; break;
-  case 'd': diatonic = 2; break;
-  case 'f': diatonic = 3; break;
-  case 'g': diatonic = 4; break;
-  case 'h': diatonic = 5; break;
-  case 'j': diatonic = 6; break;
-  case 'z': diatonic = 0; break;
-  case 'x': diatonic = 1; break;
-  case 'c': diatonic = 2; break;
-  case 'v': diatonic = 3; break;
-  case 'b': diatonic = 4; break;
-  case 'n': diatonic = 5; break;
-  case 'm': diatonic = 6; break;
-  }
-
-  if (diatonic == -1)
-    return;
-
-  editor->table[diatonic] = event->degree;
 }
 
 static int editor_handle_key(struct editor* editor) {
@@ -264,6 +238,7 @@ static int editor_handle_key(struct editor* editor) {
     }
     break;
   case MODE_EDO:
+  case MODE_31_EDO:
     switch(ch) {
     case '1': editor_enter_note_on(editor,6,0); return 0;
     case '2': editor_enter_note_on(editor,6,1); return 0;
@@ -325,9 +300,9 @@ static int editor_handle_key(struct editor* editor) {
   case '"': editor_uniquify_pattern(editor); break;
   case '8': editor_transpose(editor,-1); break;
   case '9': editor_transpose(editor,1); break;
-  case '!': editor_grab_note_degree(editor); break;
   case '#': editor->tuning_mode = MODE_EDO; break;
   case '%': editor->tuning_mode = MODE_JI; break;
+  case '$': editor->tuning_mode = MODE_31_EDO; break;
   default:
     if (ch == KEY_F(2)) {
       song_save(editor->song,editor->filename);
