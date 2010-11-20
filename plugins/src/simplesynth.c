@@ -1,23 +1,25 @@
 #include "synthdesc.h"
 #include "shared/onepole.h"
 #include "shared/moogfilter.h"
+#include "shared/fasttanh.h"
 #include <strings.h> // bzero
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 
-#define LPFREQ1 900
-#define LPFREQ2 6000
+#define LPFREQ2 16000
 
-#define BASE_CUTOFF 500
-#define BRIGHTNESS 2.0
-#define RESONANCE 0.0
-#define GAIN_CORNER 20000
+#define RESONANCE 0.1
+
+#define CUTOFF 4000
 #define DC_GAIN 0.5
 
+#define GAIN_TRACKING 0.20
+#define CUTOFF_TRACKING 0.7
+
 struct voice {
-  //struct moogfilter filter;
+  struct moogfilter filter;
   double lpstate1;
   double lpstate2;
   double phase1;
@@ -56,13 +58,13 @@ static void init(void* synth, float samplerate) {
   int i;
   for(i=0;i<128;i++) {
     struct voice* v = &s->voice[i];
-    //moogfilter_init(&v->filter);
+    moogfilter_init(&v->filter);
     v->phase1=-0.5+rand()*(1.0/(RAND_MAX+1.0));
     v->drift1=0;
     v->freq=220;
-    v->cutoff=BRIGHTNESS/8;
+    v->cutoff=CUTOFF;
     v->smoothedfreq=220;
-    v->smoothedcutoff=1.0;
+    v->smoothedcutoff=v->cutoff;
     v->gate=0;
     v->smoothedamp=1.0e-5;
     v->active=0;
@@ -111,7 +113,7 @@ static void process(void* synth, int length, float const* const* in, float* cons
     outright[sample]=1.0e-12;
   }
   double const omega2 = LPFREQ2 * 2 * 3.141592 / s->samplerate;
-  double const lpcoeff2 = omega2 / (omega2 + 1);
+  //double const lpcoeff2 = omega2 / (omega2 + 1);
 
   for(int voiceno=0;voiceno<128;voiceno++) {
     struct voice* restrict v = &s->voice[voiceno];
@@ -165,8 +167,9 @@ static void process(void* synth, int length, float const* const* in, float* cons
 	  phase1 -= 1.0;
 	}
 	double osc = v->lpstate2 - 0.5;
+	//double osc = v->phase1 - 0.5;
 
-        double cutoff = s->mod * v->cutoff;
+        double cutoff = v->cutoff * powf(smoothedfreq/440,CUTOFF_TRACKING);;
 	v->smoothedcutoff += (cutoff - v->smoothedcutoff) * filterattackcoeff * v->smoothedcutoff / 10000;
 
 	v->phase1=phase1;
@@ -175,19 +178,21 @@ static void process(void* synth, int length, float const* const* in, float* cons
         double env = smoothedamp+=smoothedampdiff*
           (smoothedampdiff > 0 ? ampattackcoeff : ampreleasecoeff);
 
-        //double const gain = pow(smoothedfreq/440,-GAIN_TRACKING);
+        double const gain = DC_GAIN * powf(smoothedfreq/440,-GAIN_TRACKING);
 
-	double freq_above_gain = smoothedfreq/GAIN_CORNER;
-	double gain = DC_GAIN / sqrt(1.0 + freq_above_gain * freq_above_gain);
+	//double freq_above_gain = smoothedfreq/GAIN_CORNER;
+	//double gain = DC_GAIN / sqrt(1.0 + freq_above_gain * freq_above_gain);
 
-        env *= gain;
         osc *= env;
-	double brighted_freq = BRIGHTNESS*smoothedfreq;
-	double omega = sqrt(brighted_freq*brighted_freq + BASE_CUTOFF*BASE_CUTOFF) * 2 * 3.1415192 / s->samplerate;
-	//osc = moogfilter_tick(&v->filter, osc, omega, resonance);
+	double omega = cutoff * 2 * 3.141592 / s->samplerate;
+	osc *= 4;
+	double lpcoeff1 = omega / (omega + 1);
+	osc = v->lpstate1 += fasttanh(osc - v->lpstate1) * lpcoeff1;
+	//osc = moogfilter_tick(&v->filter, osc, omega, s->resonance);
+	osc *= 0.125;
+	osc *= gain;
 	
-	double lpcoeff1 = omega / (omega + 1); // LPFREQ1 * 2 * 3.141592 / s->samplerate;
-	osc = v->lpstate1 += (osc - v->lpstate1) * lpcoeff1;
+	//osc = v->lpstate1 += fasttanh(osc - v->lpstate1) * lpcoeff1;
 	//osc = v->lpstate2 += (osc - v->lpstate2) * lpcoeff2;
 
         outleft[sample] += osc * gainL;
@@ -216,7 +221,7 @@ static void noteon(void* synth, int key, float freq, float velocity) {
   v->freq = freq;
 
   v->gate = 1.0;
-  v->cutoff = BRIGHTNESS * velocity;
+  v->cutoff = CUTOFF * velocity * 2;
   v->active=1;
 };
 
